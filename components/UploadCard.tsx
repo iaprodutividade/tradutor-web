@@ -14,6 +14,8 @@ import {
   Eye,
   X,
   ZoomIn,
+  Minus,
+  Plus,
 } from "lucide-react";
 import { Card } from "@/components/ui";
 import { AcaoPill } from "@/components/AcaoTile";
@@ -290,26 +292,11 @@ function ResultadoPreview({ resultado }: { resultado: Resultado }) {
           </div>
 
           {lightbox && (
-            <Lightbox onClose={() => setLightbox(false)}>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="mb-2 text-center text-xs font-medium text-zinc-400">Original</p>
-                  <img
-                    src={`data:image/png;base64,${resultado.imagem_original_base64}`}
-                    alt="Página original ampliada"
-                    className="w-full rounded-xl"
-                  />
-                </div>
-                <div>
-                  <p className="mb-2 text-center text-xs font-medium text-zinc-400">Traduzido</p>
-                  <img
-                    src={`data:image/png;base64,${resultado.imagem_traduzida_base64}`}
-                    alt="Página traduzida ampliada"
-                    className="w-full rounded-xl"
-                  />
-                </div>
-              </div>
-            </Lightbox>
+            <Lightbox
+              imagemOriginal={`data:image/png;base64,${resultado.imagem_original_base64}`}
+              imagemTraduzida={`data:image/png;base64,${resultado.imagem_traduzida_base64}`}
+              onClose={() => setLightbox(false)}
+            />
           )}
         </>
       ) : (
@@ -356,27 +343,126 @@ function ResultadoPreview({ resultado }: { resultado: Resultado }) {
   );
 }
 
-function Lightbox({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 5;
+const ZOOM_PASSO = 0.5;
+
+// Zoom via CSS width (não transform), pra crescer o tamanho real do conteúdo
+// dentro do container com overflow-auto — assim o scroll/arrastar pra navegar
+// funciona em qualquer navegador, sem precisar de canvas ou lib externa.
+function useArrastarPraRolar<T extends HTMLElement>() {
+  const ref = useRef<T | null>(null);
+  const arrastando = useRef(false);
+  const inicio = useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
+
+  function aoPressionar(e: React.MouseEvent) {
+    if (!ref.current) return;
+    arrastando.current = true;
+    inicio.current = {
+      x: e.clientX,
+      y: e.clientY,
+      scrollLeft: ref.current.scrollLeft,
+      scrollTop: ref.current.scrollTop,
+    };
+  }
+  function aoMover(e: React.MouseEvent) {
+    if (!arrastando.current || !ref.current) return;
+    ref.current.scrollLeft = inicio.current.scrollLeft - (e.clientX - inicio.current.x);
+    ref.current.scrollTop = inicio.current.scrollTop - (e.clientY - inicio.current.y);
+  }
+  function aoSoltar() {
+    arrastando.current = false;
+  }
+
+  return { ref, aoPressionar, aoMover, aoSoltar };
+}
+
+function PainelZoom({ src, alt, zoom }: { src: string; alt: string; zoom: number }) {
+  const { ref, aoPressionar, aoMover, aoSoltar } = useArrastarPraRolar<HTMLDivElement>();
+  return (
+    <div
+      ref={ref}
+      onMouseDown={aoPressionar}
+      onMouseMove={aoMover}
+      onMouseUp={aoSoltar}
+      onMouseLeave={aoSoltar}
+      className={`max-h-[75vh] overflow-auto rounded-xl bg-zinc-900 ${zoom > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
+    >
+      <img src={src} alt={alt} draggable={false} style={{ width: `${zoom * 100}%`, maxWidth: "none" }} />
+    </div>
+  );
+}
+
+function Lightbox({
+  imagemOriginal,
+  imagemTraduzida,
+  onClose,
+}: {
+  imagemOriginal: string;
+  imagemTraduzida: string;
+  onClose: () => void;
+}) {
+  const [zoom, setZoom] = useState(1);
+
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", aoTeclar);
     return () => document.removeEventListener("keydown", aoTeclar);
   }, [onClose]);
 
+  function aumentarZoom() {
+    setZoom((z) => Math.min(ZOOM_MAX, z + ZOOM_PASSO));
+  }
+  function diminuirZoom() {
+    setZoom((z) => Math.max(ZOOM_MIN, z - ZOOM_PASSO));
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
-      <div className="relative w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
-        <button
-          onClick={onClose}
-          className="absolute -top-10 right-0 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
-          aria-label="Fechar"
-        >
-          <X className="h-5 w-5" />
-        </button>
-        {children}
+      <div className="relative w-full max-w-6xl" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute -top-12 right-0 flex items-center gap-2">
+          <button
+            onClick={diminuirZoom}
+            disabled={zoom <= ZOOM_MIN}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 disabled:opacity-40"
+            aria-label="Diminuir zoom"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <span className="w-12 text-center text-xs font-medium text-white/80">{Math.round(zoom * 100)}%</span>
+          <button
+            onClick={aumentarZoom}
+            disabled={zoom >= ZOOM_MAX}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 disabled:opacity-40"
+            aria-label="Aumentar zoom"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+          <button
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+            aria-label="Fechar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <p className="mb-2 text-center text-xs font-medium text-zinc-400">Original</p>
+            <PainelZoom src={imagemOriginal} alt="Página original ampliada" zoom={zoom} />
+          </div>
+          <div>
+            <p className="mb-2 text-center text-xs font-medium text-zinc-400">Traduzido</p>
+            <PainelZoom src={imagemTraduzida} alt="Página traduzida ampliada" zoom={zoom} />
+          </div>
+        </div>
+        {zoom > 1 && (
+          <p className="mt-2 text-center text-xs text-white/50">Clique e arraste a imagem pra navegar</p>
+        )}
       </div>
     </div>
   );

@@ -106,7 +106,7 @@ export function AcaoPill({
       }`}
     >
       {pulsando && (
-        <span className="absolute inset-0 -z-10 animate-[ping_1s_cubic-bezier(0,0,0.2,1)_1] rounded-xl bg-white/40" />
+        <span className="absolute inset-0 -z-10 animate-[ping_1s_cubic-bezier(0,0,0.2,1)_3] rounded-xl bg-white/40" />
       )}
       {iconDepois ? (
         <>

@@ -41,17 +41,23 @@ export default function Home() {
         <div>
           <Badge>Novo</Badge>
           <h1 className="mt-4 text-4xl font-bold tracking-tight text-[var(--text-primary)] sm:text-5xl">
-            Traduza PDF e DOCX <span className="text-sky-400">sem perder o layout</span>
+            Traduza PDF e DOCX{" "}
+            <span className="inline-block rounded-2xl bg-amber-400 px-3 py-1 text-zinc-900">sem perder o layout</span>
           </h1>
           <p className="mt-4 text-lg text-[var(--text-secondary)]">
             Fichas técnicas, fichas de segurança, rótulos e contratos ficam com a mesma posição de
             texto, a mesma fonte e as mesmas imagens. Só o idioma muda.
           </p>
-          <div className="mt-8 flex flex-wrap items-center gap-4">
+          <div className="mt-8 flex justify-center">
             <a href="#traduzir" className="group">
-              <AcaoPill cor="azul" label="Traduzir meu documento" icon={<FileText className="h-4 w-4" />} className="text-base" />
+              <AcaoPill
+                cor="azul"
+                label="Traduzir meu documento"
+                icon={<FileText className="h-5 w-5" />}
+                className="px-7 py-3.5 text-base"
+                pulsando
+              />
             </a>
-            <span className="text-sm text-[var(--text-muted)]">1ª página sempre grátis</span>
           </div>
         </div>
 
@@ -99,7 +105,7 @@ export default function Home() {
       {/* Preço + confiança */}
       <section className="mt-24">
         <h2 className="text-center text-2xl font-bold text-[var(--text-primary)]">
-          Preço simples — e quanto maior o documento, mais barata fica a página
+          Quanto mais você traduz, mais barato fica por página
         </h2>
 
         <div className="mt-10 grid items-start gap-10 lg:grid-cols-2 lg:gap-16">
