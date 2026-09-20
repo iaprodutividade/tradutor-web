@@ -16,6 +16,7 @@ import {
   ZoomIn,
   Minus,
   Plus,
+  ShieldCheck,
 } from "lucide-react";
 import { Card } from "@/components/ui";
 import { AcaoPill } from "@/components/AcaoTile";
@@ -330,7 +331,7 @@ function ResultadoPreview({ resultado }: { resultado: Resultado }) {
             </p>
           ) : (
             resultado.preco_por_pagina_centavos < 500 && (
-              <p className="text-xs font-medium text-emerald-400">
+              <p className="text-xs font-medium text-[var(--accent-success)]">
                 Desconto de volume aplicado: {formatarPreco(resultado.preco_por_pagina_centavos)}/página
               </p>
             )
@@ -470,6 +471,50 @@ function Lightbox({
 
 type EtapaCheckout = "escolha" | "aguardando" | "pronto" | "erro";
 
+function BarraProgressoTraducao({
+  progresso,
+}: {
+  progresso: { feitas: number; total: number; tipoArquivo: string };
+}) {
+  const { feitas, total, tipoArquivo } = progresso;
+  // Sem total ainda (o backend so sabe depois de abrir o arquivo) — mostra
+  // uma barra "indeterminada" em vez de travar em 0% parecendo travado.
+  const temTotal = total > 0;
+  const percentual = temTotal ? Math.min(100, Math.round((feitas / total) * 100)) : 0;
+
+  return (
+    <div className="flex w-full flex-col items-center gap-4 text-center">
+      <div className="flex items-center gap-2 text-[var(--accent-success)]">
+        <ShieldCheck className="h-5 w-5" />
+        <p className="text-sm font-semibold text-[var(--text-primary)]">Pagamento confirmado</p>
+      </div>
+
+      <div className="w-full max-w-sm space-y-2">
+        <div className="h-3 w-full overflow-hidden rounded-full bg-[var(--surface-2)] ring-1 ring-[var(--border)]">
+          <div
+            className={`h-full rounded-full bg-gradient-to-r from-sky-500 to-blue-600 shadow-[0_0_10px_rgba(56,189,248,0.55)] transition-[width] duration-700 ease-out ${
+              temTotal ? "" : "w-1/3 animate-pulse"
+            }`}
+            style={temTotal ? { width: `${percentual}%` } : undefined}
+          />
+        </div>
+        <p className="text-sm font-medium text-[var(--text-primary)]">
+          {temTotal
+            ? tipoArquivo === "pdf"
+              ? `Traduzindo página ${feitas} de ${total} — ${percentual}%`
+              : `Traduzindo o conteúdo — ${percentual}%`
+            : "Preparando o documento..."}
+        </p>
+      </div>
+
+      <p className="max-w-sm text-xs text-[var(--text-muted)]">
+        Mantendo a mesma posição de texto, fonte e imagens do original enquanto traduz. Isso pode levar alguns
+        minutos em documentos grandes — fique nesta página até o botão de download aparecer.
+      </p>
+    </div>
+  );
+}
+
 function Checkout({ jobId, valorCentavos }: { jobId: string; valorCentavos: number }) {
   const [etapa, setEtapa] = useState<EtapaCheckout>("escolha");
   const [processandoPix, setProcessandoPix] = useState(false);
@@ -478,6 +523,12 @@ function Checkout({ jobId, valorCentavos }: { jobId: string; valorCentavos: numb
   const [copiado, setCopiado] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [mostrarCartao, setMostrarCartao] = useState(false);
+  const [progresso, setProgresso] = useState<{
+    statusJob: string;
+    feitas: number;
+    total: number;
+    tipoArquivo: string;
+  } | null>(null);
 
   useEffect(() => {
     if (etapa !== "aguardando") return;
@@ -493,6 +544,13 @@ function Checkout({ jobId, valorCentavos }: { jobId: string; valorCentavos: numb
           setErro(data.erro_mensagem ?? "Deu erro ao processar o documento. Fala com a gente.");
           setEtapa("erro");
           clearInterval(intervalo);
+        } else {
+          setProgresso({
+            statusJob: data.status,
+            feitas: data.unidades_processadas ?? 0,
+            total: data.unidades_total ?? 0,
+            tipoArquivo: data.tipo_arquivo ?? "pdf",
+          });
         }
       } catch {
         // rede instável — tenta de novo no próximo tick, sem derrubar o polling
@@ -559,7 +617,7 @@ function Checkout({ jobId, valorCentavos }: { jobId: string; valorCentavos: numb
   if (etapa === "pronto") {
     return (
       <div className="flex flex-col items-center gap-3 text-center">
-        <p className="text-sm font-medium text-emerald-400">Pagamento confirmado — seu documento está pronto!</p>
+        <p className="text-sm font-medium text-[var(--accent-success)]">Pagamento confirmado — seu documento está pronto!</p>
         {downloadUrl ? (
           <a href={downloadUrl} target="_blank" rel="noreferrer">
             <AcaoPill cor="esmeralda" label="Baixar documento traduzido" icon={<Download className="h-4 w-4" />} />
@@ -572,6 +630,12 @@ function Checkout({ jobId, valorCentavos }: { jobId: string; valorCentavos: numb
   }
 
   if (etapa === "aguardando") {
+    const processando = progresso?.statusJob === "processando";
+
+    if (processando) {
+      return <BarraProgressoTraducao progresso={progresso} />;
+    }
+
     return (
       <div className="flex flex-col items-center gap-4 text-center">
         {pix ? (

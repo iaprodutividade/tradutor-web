@@ -18,6 +18,22 @@
   --text-muted: #71717a;
   --input-bg: #18181b;
   --surface-modal: #09090b;
+
+  /* Cores de status (badge/texto) — mesmo tom em texto puro e em pilula com
+     fundo translucido, ajustadas por tema pra nunca perder contraste (ver
+     feedback_padrao_visual_relatorios_graficos). */
+  --accent-success: #34d399;
+  --accent-success-bg: rgba(16, 185, 129, 0.15);
+  --accent-success-border: rgba(16, 185, 129, 0.3);
+  --accent-info: #38bdf8;
+  --accent-info-bg: rgba(14, 165, 233, 0.15);
+  --accent-info-border: rgba(14, 165, 233, 0.3);
+  --accent-warning: #fbbf24;
+  --accent-warning-bg: rgba(245, 158, 11, 0.15);
+  --accent-warning-border: rgba(245, 158, 11, 0.3);
+  --accent-danger: #f87171;
+  --accent-danger-bg: rgba(239, 68, 68, 0.15);
+  --accent-danger-border: rgba(239, 68, 68, 0.3);
 }
 
 [data-theme="intermediario"] {
@@ -52,6 +68,21 @@
   --text-muted: #6b7280;
   --input-bg: #ffffff;
   --surface-modal: #ffffff;
+
+  /* Tons mais escuros/saturados que os do tema escuro — o mesmo emerald-400
+     "claro" de um fundo preto vira quase invisivel num fundo branco. */
+  --accent-success: #047857;
+  --accent-success-bg: rgba(4, 120, 87, 0.12);
+  --accent-success-border: rgba(4, 120, 87, 0.35);
+  --accent-info: #0369a1;
+  --accent-info-bg: rgba(3, 105, 161, 0.12);
+  --accent-info-border: rgba(3, 105, 161, 0.35);
+  --accent-warning: #b45309;
+  --accent-warning-bg: rgba(180, 83, 9, 0.12);
+  --accent-warning-border: rgba(180, 83, 9, 0.35);
+  --accent-danger: #b91c1c;
+  --accent-danger-bg: rgba(185, 28, 28, 0.12);
+  --accent-danger-border: rgba(185, 28, 28, 0.35);
 }
 
 @theme inline {

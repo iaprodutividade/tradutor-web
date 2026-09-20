@@ -21,11 +21,11 @@ export function StatTile({ label, value, hint }: { label: string; value: string;
 }
 
 const BADGE_STYLES: Record<string, string> = {
-  Grátis: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  Pago: "bg-sky-500/15 text-sky-400 border-sky-500/30",
-  Processando: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-  Pronto: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  Erro: "bg-red-500/15 text-red-400 border-red-500/30",
+  Grátis: "bg-[var(--accent-success-bg)] text-[var(--accent-success)] border-[var(--accent-success-border)]",
+  Pago: "bg-[var(--accent-info-bg)] text-[var(--accent-info)] border-[var(--accent-info-border)]",
+  Processando: "bg-[var(--accent-warning-bg)] text-[var(--accent-warning)] border-[var(--accent-warning-border)]",
+  Pronto: "bg-[var(--accent-success-bg)] text-[var(--accent-success)] border-[var(--accent-success-border)]",
+  Erro: "bg-[var(--accent-danger-bg)] text-[var(--accent-danger)] border-[var(--accent-danger-border)]",
 };
 
 export function Badge({ children }: { children: string }) {

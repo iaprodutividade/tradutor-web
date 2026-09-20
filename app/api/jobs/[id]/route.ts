@@ -28,5 +28,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     erro_mensagem: job.erro_mensagem,
     download_url: downloadUrl,
     nome_arquivo: job.nome_arquivo,
+    tipo_arquivo: job.tipo_arquivo,
+    unidades_processadas: job.unidades_processadas,
+    unidades_total: job.unidades_total,
   });
 }

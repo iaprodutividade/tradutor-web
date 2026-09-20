@@ -3,6 +3,7 @@ import { FileText, Eye, QrCode, ShieldCheck, Ruler, CreditCard, Zap } from "luci
 import { Card, Badge } from "@/components/ui";
 import { AcaoTile, AcaoPill } from "@/components/AcaoTile";
 import { UploadCard } from "@/components/UploadCard";
+import { CaixaSugestao } from "@/components/CaixaSugestao";
 
 const FAIXAS_PRECO = [
   { paginas: "1 a 15", preco: "R$ 5,00", desconto: null },
@@ -129,7 +130,7 @@ export default function Home() {
                       <td className="px-3 py-2 font-semibold text-[var(--text-primary)]">{f.preco}</td>
                       <td className="px-3 py-2">
                         {f.desconto ? (
-                          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-400">
+                          <span className="rounded-full bg-[var(--accent-success-bg)] px-2 py-0.5 text-xs font-medium text-[var(--accent-success)]">
                             {f.desconto}
                           </span>
                         ) : (
@@ -180,7 +181,7 @@ export default function Home() {
             </a>
           </Card>
 
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center gap-3">
             <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-[var(--border)] shadow-[0_0_40px_rgba(56,189,248,0.1)]">
               <Image
                 src="/images/unlock-tradutor.png"
@@ -190,8 +191,17 @@ export default function Home() {
                 className="h-auto w-full"
               />
             </div>
+            <p className="max-w-sm text-center text-sm text-[var(--text-secondary)]">
+              Quanto mais páginas você traduz de uma vez, mais barato fica — o desconto cresce na mesma proporção do
+              volume.
+            </p>
           </div>
         </div>
+      </section>
+
+      {/* Sugestão / suporte */}
+      <section className="mt-24">
+        <CaixaSugestao />
       </section>
     </div>
   );
