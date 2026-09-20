@@ -149,7 +149,7 @@ export default function Home() {
                 <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-sky-400" />
                 <div>
                   <p className="text-sm font-medium text-[var(--text-primary)]">Cartão</p>
-                  <p className="text-xs text-[var(--text-muted)]">Parcela em várias vezes</p>
+                  <p className="text-xs text-[var(--text-muted)]">Até 12x sem juros</p>
                 </div>
               </div>
             </div>
@@ -178,7 +178,7 @@ export default function Home() {
             <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-[var(--border)] shadow-[0_0_40px_rgba(56,189,248,0.1)]">
               <Image
                 src="/images/unlock-tradutor.png"
-                alt="Documento traduzido liberado após o pagamento"
+                alt="Preço por página caindo conforme o volume de páginas do documento aumenta"
                 width={1200}
                 height={896}
                 className="h-auto w-full"
