@@ -1,8 +1,16 @@
 import Image from "next/image";
-import { FileText, Eye, QrCode, ShieldCheck, Ruler } from "lucide-react";
+import { FileText, Eye, QrCode, ShieldCheck, Ruler, CreditCard, Zap } from "lucide-react";
 import { Card, Badge } from "@/components/ui";
 import { AcaoTile, AcaoPill } from "@/components/AcaoTile";
 import { UploadCard } from "@/components/UploadCard";
+
+const FAIXAS_PRECO = [
+  { paginas: "1 a 15", preco: "R$ 5,00", desconto: null },
+  { paginas: "16 a 50", preco: "R$ 4,50", desconto: "10% off" },
+  { paginas: "51 a 100", preco: "R$ 4,00", desconto: "20% off" },
+  { paginas: "101 a 200", preco: "R$ 3,50", desconto: "30% off" },
+  { paginas: "200+", preco: "R$ 3,00", desconto: "40% off" },
+];
 
 const PASSOS = [
   {
@@ -89,15 +97,62 @@ export default function Home() {
       </section>
 
       {/* Preço + confiança */}
-      <section className="mt-24 grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
-        <div className="order-2 lg:order-1">
+      <section className="mt-24">
+        <h2 className="text-center text-2xl font-bold text-[var(--text-primary)]">
+          Preço simples — e quanto maior o documento, mais barata fica a página
+        </h2>
+
+        <div className="mt-10 grid items-start gap-10 lg:grid-cols-2 lg:gap-16">
           <Card>
-            <h2 className="text-xl font-bold text-[var(--text-primary)]">Preço simples, sem surpresa</h2>
-            <div className="mt-5 flex items-baseline gap-2">
-              <span className="text-4xl font-bold text-sky-400">R$5</span>
-              <span className="text-sm text-[var(--text-secondary)]">por página</span>
+            <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
+              Desconto por volume
+            </p>
+            <div className="mt-3 overflow-hidden rounded-xl border border-[var(--border)]">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-[var(--surface-2)] text-left text-[var(--text-secondary)]">
+                    <th className="px-3 py-2 font-medium">Páginas</th>
+                    <th className="px-3 py-2 font-medium">Preço/página</th>
+                    <th className="px-3 py-2 font-medium">Desconto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {FAIXAS_PRECO.map((f) => (
+                    <tr key={f.paginas} className="border-t border-[var(--border)]">
+                      <td className="px-3 py-2 text-[var(--text-secondary)]">{f.paginas}</td>
+                      <td className="px-3 py-2 font-semibold text-[var(--text-primary)]">{f.preco}</td>
+                      <td className="px-3 py-2">
+                        {f.desconto ? (
+                          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-400">
+                            {f.desconto}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-[var(--text-muted)]">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">Cobrança mínima de R$14,90 por documento.</p>
+            <p className="mt-2 text-xs text-[var(--text-muted)]">Cobrança mínima de R$14,90 por documento.</p>
+
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <div className="flex items-start gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
+                <Zap className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                <div>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">Pix</p>
+                  <p className="text-xs text-[var(--text-muted)]">À vista, liberação na hora</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
+                <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-sky-400" />
+                <div>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">Cartão</p>
+                  <p className="text-xs text-[var(--text-muted)]">Parcela em várias vezes</p>
+                </div>
+              </div>
+            </div>
 
             <ul className="mt-6 space-y-3 text-sm text-[var(--text-secondary)]">
               <li className="flex items-start gap-2">
@@ -112,27 +167,23 @@ export default function Home() {
                 <Ruler className="mt-0.5 h-4 w-4 shrink-0 text-violet-400" />
                 Conversão de unidade de medida opcional, com o original sempre visível ao lado da conversão
               </li>
-              <li className="flex items-start gap-2">
-                <QrCode className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-                Pagamento único via Pix, liberação automática do arquivo completo
-              </li>
             </ul>
 
             <a href="#traduzir" className="group mt-7 inline-block">
               <AcaoPill cor="azul" label="Começar agora" icon={<FileText className="h-4 w-4" />} />
             </a>
           </Card>
-        </div>
 
-        <div className="order-1 flex justify-center lg:order-2">
-          <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-[var(--border)] shadow-[0_0_40px_rgba(56,189,248,0.1)]">
-            <Image
-              src="/images/unlock-tradutor.png"
-              alt="Documento traduzido liberado após o pagamento"
-              width={1200}
-              height={896}
-              className="h-auto w-full"
-            />
+          <div className="flex justify-center">
+            <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-[var(--border)] shadow-[0_0_40px_rgba(56,189,248,0.1)]">
+              <Image
+                src="/images/unlock-tradutor.png"
+                alt="Documento traduzido liberado após o pagamento"
+                width={1200}
+                height={896}
+                className="h-auto w-full"
+              />
+            </div>
           </div>
         </div>
       </section>

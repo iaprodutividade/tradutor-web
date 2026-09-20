@@ -10,6 +10,7 @@ type ResultadoPdf = {
   tipo: "pdf";
   paginas_total: number;
   preco_centavos: number;
+  preco_por_pagina_centavos: number;
   imagem_original_base64: string;
   imagem_traduzida_base64: string;
 };
@@ -18,6 +19,7 @@ type ResultadoDocx = {
   tipo: "docx";
   paginas_total: number;
   preco_centavos: number;
+  preco_por_pagina_centavos: number;
   texto_original: string[];
   texto_traduzido: string[];
   paragrafos_restantes: number;
@@ -226,7 +228,14 @@ function ResultadoPreview({ resultado }: { resultado: Resultado }) {
           Documento completo: <strong className="text-[var(--text-primary)]">{resultado.paginas_total} página(s)</strong>
         </p>
         <p className="text-2xl font-bold text-sky-400">{formatarPreco(resultado.preco_centavos)}</p>
-        <p className="text-xs text-[var(--text-muted)]">Pagamento único via Pix — em breve disponível aqui.</p>
+        {resultado.preco_por_pagina_centavos < 500 && (
+          <p className="text-xs font-medium text-emerald-400">
+            Desconto de volume aplicado: {formatarPreco(resultado.preco_por_pagina_centavos)}/página
+          </p>
+        )}
+        <p className="text-xs text-[var(--text-muted)]">
+          Pix à vista ou cartão parcelado — em breve disponível aqui.
+        </p>
         <AcaoPill cor="violeta" label="Pagar com Pix" icon={<QrCode className="h-4 w-4" />} pressionado />
       </div>
     </div>
