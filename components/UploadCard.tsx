@@ -44,6 +44,8 @@ type ResultadoDocx = {
   texto_original: string[];
   texto_traduzido: string[];
   paragrafos_restantes: number;
+  imagem_original_base64: string;
+  imagem_traduzida_base64: string;
 };
 
 type Resultado = ResultadoPdf | ResultadoDocx;
@@ -264,69 +266,52 @@ function ResultadoPreview({
 
   return (
     <div className="space-y-5 border-t border-[var(--border)] pt-6">
-      {resultado.tipo === "pdf" ? (
-        <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => setLightbox(true)}
-              className="group relative"
-              aria-label="Ampliar comparação"
-            >
-              <p className="mb-2 text-center text-xs font-medium text-[var(--text-muted)]">Original</p>
-              <img
-                src={`data:image/png;base64,${resultado.imagem_original_base64}`}
-                alt="Página original"
-                className="w-full rounded-xl border border-[var(--border)] transition group-hover:opacity-80"
-              />
-              <ZoomIn className="pointer-events-none absolute right-2 top-9 h-6 w-6 rounded-md bg-black/60 p-1 text-white opacity-80 transition group-hover:opacity-100" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setLightbox(true)}
-              className="group relative"
-              aria-label="Ampliar comparação"
-            >
-              <p className="mb-2 text-center text-xs font-medium text-[var(--text-muted)]">Traduzido</p>
-              <img
-                src={`data:image/png;base64,${resultado.imagem_traduzida_base64}`}
-                alt="Página traduzida"
-                className="w-full rounded-xl border border-[var(--border)] transition group-hover:opacity-80"
-              />
-              <ZoomIn className="pointer-events-none absolute right-2 top-9 h-6 w-6 rounded-md bg-black/60 p-1 text-white opacity-80 transition group-hover:opacity-100" />
-            </button>
-          </div>
-          <p className="text-center text-xs text-[var(--text-muted)]">Clique em qualquer uma das imagens pra ampliar</p>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={() => setLightbox(true)}
+          className="group relative"
+          aria-label="Ampliar comparação"
+        >
+          <p className="mb-2 text-center text-xs font-medium text-[var(--text-muted)]">Original</p>
+          <img
+            src={`data:image/png;base64,${resultado.imagem_original_base64}`}
+            alt="Página original"
+            className="w-full rounded-xl border border-[var(--border)] transition group-hover:opacity-80"
+          />
+          <ZoomIn className="pointer-events-none absolute right-2 top-9 h-6 w-6 rounded-md bg-black/60 p-1 text-white opacity-80 transition group-hover:opacity-100" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setLightbox(true)}
+          className="group relative"
+          aria-label="Ampliar comparação"
+        >
+          <p className="mb-2 text-center text-xs font-medium text-[var(--text-muted)]">Traduzido</p>
+          <img
+            src={`data:image/png;base64,${resultado.imagem_traduzida_base64}`}
+            alt="Página traduzida"
+            className="w-full rounded-xl border border-[var(--border)] transition group-hover:opacity-80"
+          />
+          <ZoomIn className="pointer-events-none absolute right-2 top-9 h-6 w-6 rounded-md bg-black/60 p-1 text-white opacity-80 transition group-hover:opacity-100" />
+        </button>
+      </div>
+      <p className="text-center text-xs text-[var(--text-muted)]">Clique em qualquer uma das imagens pra ampliar</p>
 
-          <div className="flex justify-center">
-            <button onClick={baixarPdfExemplo} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-info)] hover:opacity-75">
-              <Download className="h-3.5 w-3.5" /> Baixar essa página em PDF (texto editável, não imagem)
-            </button>
-          </div>
-
-          {lightbox && (
-            <Lightbox
-              imagemOriginal={`data:image/png;base64,${resultado.imagem_original_base64}`}
-              imagemTraduzida={`data:image/png;base64,${resultado.imagem_traduzida_base64}`}
-              onClose={() => setLightbox(false)}
-            />
-          )}
-        </>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm text-[var(--text-secondary)]">
-            <p className="text-xs font-medium text-[var(--text-muted)]">Original</p>
-            {resultado.texto_original.map((t, i) => (
-              <p key={i}>{t}</p>
-            ))}
-          </div>
-          <div className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm text-[var(--text-secondary)]">
-            <p className="text-xs font-medium text-[var(--text-muted)]">Traduzido</p>
-            {resultado.texto_traduzido.map((t, i) => (
-              <p key={i}>{t}</p>
-            ))}
-          </div>
+      {resultado.tipo === "pdf" && (
+        <div className="flex justify-center">
+          <button onClick={baixarPdfExemplo} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-info)] hover:opacity-75">
+            <Download className="h-3.5 w-3.5" /> Baixar essa página em PDF (texto editável, não imagem)
+          </button>
         </div>
+      )}
+
+      {lightbox && (
+        <Lightbox
+          imagemOriginal={`data:image/png;base64,${resultado.imagem_original_base64}`}
+          imagemTraduzida={`data:image/png;base64,${resultado.imagem_traduzida_base64}`}
+          onClose={() => setLightbox(false)}
+        />
       )}
 
       <div className="space-y-5 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-5">
