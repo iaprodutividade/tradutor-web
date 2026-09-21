@@ -43,6 +43,11 @@ export async function POST(req: NextRequest) {
         parcelas: installments,
         valor_centavos: job.preco_centavos,
         status: pagamento.status,
+        // E-mail já é coletado pelo Card Payment Brick pra tokenizar o
+        // cartão (exigência do Mercado Pago) — só passou a ser salvo aqui,
+        // não é um campo novo no checkout. CPF fica de fora por decisão do
+        // Robson (não é do interesse dele guardar).
+        payer_email: email,
       },
       { onConflict: "provider_payment_id" }
     );

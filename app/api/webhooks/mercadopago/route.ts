@@ -37,6 +37,8 @@ export async function POST(req: NextRequest) {
         valor_centavos: pagamento.valorCentavos,
         status: pagamento.status,
         pago_em: pago ? new Date().toISOString() : null,
+        payer_bank_nome: pagamento.bankNome,
+        valor_liquido_centavos: pagamento.valorLiquidoCentavos,
       },
       { onConflict: "provider_payment_id" }
     );

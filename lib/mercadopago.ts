@@ -118,6 +118,8 @@ export async function buscarPagamento(paymentId: string): Promise<{
   valorCentavos: number;
   metodo: "pix" | "cartao";
   parcelas: number | null;
+  bankNome: string | null;
+  valorLiquidoCentavos: number | null;
 }> {
   const resp = await fetch(`${MERCADOPAGO_BASE_URL}/v1/payments/${paymentId}`, {
     headers: { Authorization: `Bearer ${apiKey()}` },
@@ -130,7 +132,18 @@ export async function buscarPagamento(paymentId: string): Promise<{
     status: json.status,
     externalReference: json.external_reference ?? null,
     valorCentavos: Math.round((json.transaction_amount ?? 0) * 100),
-    metodo: json.payment_type_id === "pix" ? "pix" : "cartao",
+    // Bug corrigido: `payment_type_id` do pix é "bank_transfer", não "pix" —
+    // o campo que identifica o método de fato é `payment_method_id`. Antes
+    // disso todo pagamento pix ficava salvo como "cartao" no banco.
+    metodo: json.payment_method_id === "pix" ? "pix" : "cartao",
     parcelas: json.installments ?? null,
+    // Só existe pra pix — o Mercado Pago devolve o banco de origem da
+    // transferência de graça, sem pedir nada no checkout. Nome/CPF do
+    // pagador em si não vêm preenchidos nessa consulta.
+    bankNome: json.point_of_interaction?.transaction_data?.bank_info?.payer?.long_name ?? null,
+    valorLiquidoCentavos:
+      json.transaction_details?.net_received_amount != null
+        ? Math.round(json.transaction_details.net_received_amount * 100)
+        : null,
   };
 }
