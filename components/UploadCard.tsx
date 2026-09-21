@@ -132,37 +132,6 @@ export function UploadCard() {
 
   return (
     <Card className="space-y-6">
-      <div
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          escolherArquivo(e.dataTransfer.files?.[0] ?? null);
-        }}
-        onClick={() => inputRef.current?.click()}
-        className="flex cursor-pointer flex-col items-center gap-3 rounded-2xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)] px-6 py-10 text-center transition hover:border-sky-500/50 hover:bg-[var(--surface-3)]"
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".pdf,.docx"
-          className="hidden"
-          onChange={(e) => escolherArquivo(e.target.files?.[0] ?? null)}
-        />
-        {arquivo ? (
-          <>
-            <FileText className="h-8 w-8 text-sky-400" />
-            <p className="text-sm font-medium text-[var(--text-primary)]">{arquivo.name}</p>
-            <p className="text-xs text-[var(--text-muted)]">Clique pra trocar o arquivo</p>
-          </>
-        ) : (
-          <>
-            <UploadCloud className="h-8 w-8 text-[var(--text-muted)]" />
-            <p className="text-sm font-medium text-[var(--text-primary)]">Arraste o arquivo aqui ou clique pra escolher</p>
-            <p className="text-xs text-[var(--text-muted)]">PDF ou DOCX</p>
-          </>
-        )}
-      </div>
-
       <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[1fr_auto_1fr]">
         <label className="block">
           <span className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">Idioma original</span>
@@ -195,6 +164,37 @@ export function UploadCard() {
             ))}
           </select>
         </label>
+      </div>
+
+      <div
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          escolherArquivo(e.dataTransfer.files?.[0] ?? null);
+        }}
+        onClick={() => inputRef.current?.click()}
+        className="flex cursor-pointer flex-col items-center gap-3 rounded-2xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)] px-6 py-10 text-center transition hover:border-sky-500/50 hover:bg-[var(--surface-3)]"
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".pdf,.docx"
+          className="hidden"
+          onChange={(e) => escolherArquivo(e.target.files?.[0] ?? null)}
+        />
+        {arquivo ? (
+          <>
+            <FileText className="h-8 w-8 text-sky-400" />
+            <p className="text-sm font-medium text-[var(--text-primary)]">{arquivo.name}</p>
+            <p className="text-xs text-[var(--text-muted)]">Clique pra trocar o arquivo</p>
+          </>
+        ) : (
+          <>
+            <UploadCloud className="h-8 w-8 text-[var(--text-muted)]" />
+            <p className="text-sm font-medium text-[var(--text-primary)]">Arraste o arquivo aqui ou clique pra escolher</p>
+            <p className="text-xs text-[var(--text-muted)]">PDF ou DOCX</p>
+          </>
+        )}
       </div>
 
       <label className="flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
