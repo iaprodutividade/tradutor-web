@@ -1,6 +1,6 @@
 export function SiteFooter() {
   return (
-    <footer className="border-t border-[var(--border)] px-4 py-6 text-center text-xs text-[var(--text-muted)] sm:px-6">
+    <footer className="border-t border-[var(--border)] px-4 py-6 text-center text-xs text-[#1D222B] sm:px-6">
       <p>
         Tradutor.{" "}
         <a
