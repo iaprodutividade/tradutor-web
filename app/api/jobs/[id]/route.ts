@@ -17,9 +17,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   let downloadUrl: string | null = null;
   if (job.status === "pronto" && job.arquivo_traduzido_path) {
+    // Nome amigavel pro download (o path no Storage e so o job_id, um UUID)
+    // — nome original + "-traduzido", em vez do arquivo salvo com um UUID cru.
+    const nomeOriginal: string = job.nome_arquivo || "documento";
+    const pontoExtensao = nomeOriginal.lastIndexOf(".");
+    const nomeDownload =
+      pontoExtensao > 0
+        ? `${nomeOriginal.slice(0, pontoExtensao)}-traduzido${nomeOriginal.slice(pontoExtensao)}`
+        : `${nomeOriginal}-traduzido`;
+
     const { data: signed } = await supabase.storage
       .from(BUCKET_ARQUIVOS)
-      .createSignedUrl(job.arquivo_traduzido_path, 60 * 60);
+      .createSignedUrl(job.arquivo_traduzido_path, 60 * 60, { download: nomeDownload });
     downloadUrl = signed?.signedUrl ?? null;
   }
 
