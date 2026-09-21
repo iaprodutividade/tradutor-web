@@ -334,7 +334,7 @@ function ResultadoPreview({
           <p className="text-sm text-[var(--text-secondary)]">
             Documento completo: <strong className="text-[var(--text-primary)]">{resultado.paginas_total} página(s)</strong>
           </p>
-          <p className="inline-block rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-1.5 text-3xl font-extrabold text-white shadow-[0_0_24px_rgba(56,189,248,0.4)]">
+          <p className="inline-block rounded-2xl bg-gradient-to-b from-sky-500 to-blue-600 px-6 py-2 text-3xl font-extrabold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.4),0_0_16px_3px_rgba(56,189,248,0.5),inset_0_1px_0_rgba(255,255,255,0.5),inset_0_-3px_5px_rgba(0,0,0,0.35),0_4px_10px_rgba(0,0,0,0.4)]">
             {formatarPreco(resultado.preco_centavos)}
           </p>
           {resultado.preco_centavos === PRECO_MINIMO_CENTAVOS ? (
@@ -772,9 +772,9 @@ function Checkout({
       ) : (
         <button
           onClick={() => setMostrarCupom(true)}
-          className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+          className="flex items-center gap-2 rounded-xl border border-dashed border-[var(--border-strong)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:border-sky-500/50 hover:text-[var(--text-primary)]"
         >
-          <Tag className="h-3.5 w-3.5" /> Tenho um cupom
+          <Tag className="h-4 w-4" /> Tenho um cupom
         </button>
       )}
 
