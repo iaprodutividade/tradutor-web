@@ -20,6 +20,7 @@ import {
   Tag,
   Check,
   Link2,
+  Mail,
 } from "lucide-react";
 import { Card } from "@/components/ui";
 import { AcaoPill } from "@/components/AcaoTile";
@@ -599,6 +600,79 @@ function CopiarLinkTraducao() {
   );
 }
 
+// Manda o link de recuperacao por e-mail — a pessoa digita o e-mail dela na
+// hora, sem precisar ter informado antes (mantem o fluxo sem formulario
+// pro Pix). Funciona pra recuperar de qualquer aparelho, nao so o mesmo
+// navegador.
+function EnviarPorEmail({ jobId }: { jobId: string }) {
+  const [mostrar, setMostrar] = useState(false);
+  const [email, setEmail] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function enviar() {
+    if (!email.trim()) return;
+    setEnviando(true);
+    setErro(null);
+    try {
+      const resp = await fetch("/api/enviar-por-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: jobId, email }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.erro ?? "Não deu pra enviar.");
+      setEnviado(true);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  if (enviado) {
+    return (
+      <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-success)]">
+        <Check className="h-3.5 w-3.5" /> Enviado pra {email}
+      </p>
+    );
+  }
+
+  if (!mostrar) {
+    return (
+      <button
+        onClick={() => setMostrar(true)}
+        className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+      >
+        <Mail className="h-3.5 w-3.5" /> Enviar por e-mail
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex w-full max-w-xs flex-col gap-2">
+      <div className="flex gap-2">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="seu@email.com"
+          className="w-full rounded-xl border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-sky-500/60"
+        />
+        <button
+          onClick={enviar}
+          disabled={enviando || !email.trim()}
+          className="shrink-0 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50"
+        >
+          {enviando ? "..." : "Enviar"}
+        </button>
+      </div>
+      {erro && <p className="text-xs text-[var(--accent-danger)]">{erro}</p>}
+    </div>
+  );
+}
+
 // Retoma uma tradução a partir só do job_id (URL ou localStorage) — usado
 // quando a pessoa dá F5, fecha a aba ou volta pelo link depois. Não depende
 // de nenhum estado em memória, só do que o job já tem salvo no Supabase.
@@ -679,7 +753,10 @@ function RecuperarJob({ jobId, onComecarDeNovo }: { jobId: string; onComecarDeNo
         ) : (
           <p className="text-sm text-[var(--text-muted)]">Gerando o link de download...</p>
         )}
-        <CopiarLinkTraducao />
+        <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-4">
+          <CopiarLinkTraducao />
+          <EnviarPorEmail jobId={jobId} />
+        </div>
       </div>
     );
   }
@@ -884,7 +961,10 @@ function Checkout({
         ) : (
           <p className="text-sm text-[var(--text-muted)]">Gerando o link de download...</p>
         )}
-        <CopiarLinkTraducao />
+        <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-4">
+          <CopiarLinkTraducao />
+          <EnviarPorEmail jobId={jobId} />
+        </div>
       </div>
     );
   }
