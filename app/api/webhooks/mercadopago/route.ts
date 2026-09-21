@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buscarPagamento } from "@/lib/mercadopago";
+import { dispararProcessamentoCompleto } from "@/lib/tradutor-processamento";
 
 // Webhook do Mercado Pago — só avisa o id do pagamento (topic=payment),
 // então buscamos os detalhes de verdade na API antes de confirmar. Único
@@ -53,25 +54,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json({ erro: String(err instanceof Error ? err.message : err) }, { status: 500 });
-  }
-}
-
-// Só entrega o job pro backend (VPS Andrea) e espera a confirmação de
-// recebimento (202) — o processamento em si roda em background lá, pode
-// levar minutos num documento grande, e uma função serverless não aguentaria
-// esperar isso.
-async function dispararProcessamentoCompleto(jobId: string) {
-  const apiUrl = process.env.TRADUTOR_API_URL;
-  const apiKey = process.env.TRADUTOR_API_KEY;
-  if (!apiUrl || !apiKey) throw new Error("Backend não configurado (TRADUTOR_API_URL/TRADUTOR_API_KEY).");
-
-  const resp = await fetch(`${apiUrl}/traduzir-completo`, {
-    method: "POST",
-    headers: { "X-Api-Key": apiKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ job_id: jobId }),
-  });
-  if (!resp.ok) {
-    const texto = await resp.text();
-    throw new Error(`Backend /traduzir-completo recusou o job ${jobId} (${resp.status}): ${texto.slice(0, 300)}`);
   }
 }

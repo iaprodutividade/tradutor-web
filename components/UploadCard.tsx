@@ -622,6 +622,27 @@ function Checkout({
     }
   }
 
+  const [resgatandoGratis, setResgatandoGratis] = useState(false);
+
+  async function resgatarGratis() {
+    setResgatandoGratis(true);
+    setErro(null);
+    try {
+      const resp = await fetch("/api/pagamento/gratis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: jobId }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.erro ?? "Não deu pra liberar a tradução.");
+      setEtapa("aguardando");
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    } finally {
+      setResgatandoGratis(false);
+    }
+  }
+
   async function aplicarCupom() {
     if (!codigoCupom.trim()) return;
     setAplicandoCupom(true);
@@ -667,7 +688,11 @@ function Checkout({
   }
 
   if (etapa === "aguardando") {
-    const processando = progresso?.statusJob === "processando";
+    // "pago" tambem entra aqui (nao so "processando") — no resgate de cupom
+    // gratis o job pula direto pra "pago" e o backend leva um instante pra
+    // virar "processando"; sem isso a tela piscaria a mensagem de
+    // "confirmando pagamento no cartao" por engano.
+    const processando = progresso?.statusJob === "processando" || progresso?.statusJob === "pago";
 
     if (processando) {
       return <BarraProgressoTraducao progresso={progresso} />;
@@ -763,25 +788,37 @@ function Checkout({
         </button>
       )}
 
-      <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-        <button onClick={pagarComPix} disabled={processandoPix} className="group w-full sm:w-auto">
+      {valorCentavos === 0 ? (
+        <button onClick={resgatarGratis} disabled={resgatandoGratis} className="group w-full sm:w-auto">
           <AcaoPill
-            cor="violeta"
-            label={processandoPix ? "Gerando Pix..." : "Pagar com Pix"}
-            icon={<QrCode className="h-4 w-4" />}
-            pressionado={processandoPix}
+            cor="esmeralda"
+            label={resgatandoGratis ? "Liberando..." : "Traduzir documento"}
+            icon={<FileText className="h-4 w-4" />}
+            pressionado={resgatandoGratis}
             className="w-full justify-center sm:w-auto"
           />
         </button>
-        <button onClick={() => setMostrarCartao(true)} className="group w-full sm:w-auto">
-          <AcaoPill
-            cor="azul"
-            label="Pagar com cartão (até 12x)"
-            icon={<CreditCard className="h-4 w-4" />}
-            className="w-full justify-center sm:w-auto"
-          />
-        </button>
-      </div>
+      ) : (
+        <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+          <button onClick={pagarComPix} disabled={processandoPix} className="group w-full sm:w-auto">
+            <AcaoPill
+              cor="violeta"
+              label={processandoPix ? "Gerando Pix..." : "Pagar com Pix"}
+              icon={<QrCode className="h-4 w-4" />}
+              pressionado={processandoPix}
+              className="w-full justify-center sm:w-auto"
+            />
+          </button>
+          <button onClick={() => setMostrarCartao(true)} className="group w-full sm:w-auto">
+            <AcaoPill
+              cor="azul"
+              label="Pagar com cartão (até 12x)"
+              icon={<CreditCard className="h-4 w-4" />}
+              className="w-full justify-center sm:w-auto"
+            />
+          </button>
+        </div>
+      )}
       {erro && <p className="w-full text-center text-sm text-[var(--accent-danger)]">{erro}</p>}
     </div>
   );
