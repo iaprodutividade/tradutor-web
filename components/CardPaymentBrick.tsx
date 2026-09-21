@@ -118,7 +118,7 @@ export function CardPaymentBrick({
   return (
     <div className="space-y-2">
       {carregando && <p className="text-center text-sm text-[var(--text-muted)]">Carregando pagamento por cartão...</p>}
-      {erro && <p className="text-center text-sm text-red-400">{erro}</p>}
+      {erro && <p className="text-center text-sm text-[var(--accent-danger)]">{erro}</p>}
       <div id={containerId} />
     </div>
   );

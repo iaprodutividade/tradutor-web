@@ -153,7 +153,7 @@ export default function Home() {
                 </div>
               </div>
               <div className="flex items-start gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
-                <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-sky-400" />
+                <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-[var(--accent-info)]" />
                 <div>
                   <p className="text-sm font-medium text-[var(--text-primary)]">Cartão</p>
                   <p className="text-xs text-[var(--text-muted)]">Até 12x sem juros</p>
@@ -167,7 +167,7 @@ export default function Home() {
                 1ª página traduzida grátis, sem e-mail, pra você conferir antes de pagar
               </li>
               <li className="flex items-start gap-2">
-                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-sky-400" />
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[var(--accent-info)]" />
                 Números, códigos e unidades regulatórias nunca são alterados
               </li>
               <li className="flex items-start gap-2">

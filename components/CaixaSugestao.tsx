@@ -48,7 +48,7 @@ export function CaixaSugestao() {
   return (
     <Card className="mx-auto max-w-xl">
       <div className="flex items-center gap-2">
-        <MessageSquarePlus className="h-5 w-5 text-sky-400" />
+        <MessageSquarePlus className="h-5 w-5 text-[var(--accent-info)]" />
         <p className="text-sm font-semibold text-[var(--text-primary)]">Sugestão ou algo não funcionou?</p>
       </div>
       <p className="mt-1 text-sm text-[var(--text-secondary)]">

@@ -184,7 +184,7 @@ export function UploadCard() {
         />
         {arquivo ? (
           <>
-            <FileText className="h-8 w-8 text-sky-400" />
+            <FileText className="h-8 w-8 text-[var(--accent-info)]" />
             <p className="text-sm font-medium text-[var(--text-primary)]">{arquivo.name}</p>
             <p className="text-xs text-[var(--text-muted)]">Clique pra trocar o arquivo</p>
           </>
@@ -287,7 +287,7 @@ function ResultadoPreview({ resultado }: { resultado: Resultado }) {
           <p className="text-center text-xs text-[var(--text-muted)]">Clique em qualquer uma das imagens pra ampliar</p>
 
           <div className="flex justify-center">
-            <button onClick={baixarPdfExemplo} className="flex items-center gap-1.5 text-xs font-medium text-sky-400 hover:text-sky-300">
+            <button onClick={baixarPdfExemplo} className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-info)] hover:opacity-75">
               <Download className="h-3.5 w-3.5" /> Baixar essa página em PDF (texto editável, não imagem)
             </button>
           </div>
@@ -322,7 +322,7 @@ function ResultadoPreview({ resultado }: { resultado: Resultado }) {
           <p className="text-sm text-[var(--text-secondary)]">
             Documento completo: <strong className="text-[var(--text-primary)]">{resultado.paginas_total} página(s)</strong>
           </p>
-          <p className="text-2xl font-bold text-sky-400">{formatarPreco(resultado.preco_centavos)}</p>
+          <p className="text-2xl font-bold text-[var(--accent-info)]">{formatarPreco(resultado.preco_centavos)}</p>
           {resultado.preco_centavos === PRECO_MINIMO_CENTAVOS ? (
             <p className="text-xs font-medium text-[var(--text-muted)]">
               {formatarPreco(PRECO_MINIMO_CENTAVOS)} é o valor mínimo — vale pra documentos de até{" "}
@@ -648,7 +648,7 @@ function Checkout({ jobId, valorCentavos }: { jobId: string; valorCentavos: numb
             />
             <button
               onClick={copiarCodigoPix}
-              className="flex items-center gap-1.5 text-xs font-medium text-sky-400 hover:text-sky-300"
+              className="flex items-center gap-1.5 text-xs font-medium text-[var(--accent-info)] hover:opacity-75"
             >
               <Copy className="h-3.5 w-3.5" /> {copiado ? "Copiado!" : "Copiar código Pix"}
             </button>
@@ -667,8 +667,8 @@ function Checkout({ jobId, valorCentavos }: { jobId: string; valorCentavos: numb
   if (etapa === "erro") {
     return (
       <div className="flex flex-col items-center gap-3 text-center">
-        <p className="text-sm font-medium text-red-400">{erro}</p>
-        <button onClick={() => setEtapa("escolha")} className="text-xs font-medium text-sky-400 hover:text-sky-300">
+        <p className="text-sm font-medium text-[var(--accent-danger)]">{erro}</p>
+        <button onClick={() => setEtapa("escolha")} className="text-xs font-medium text-[var(--accent-info)] hover:opacity-75">
           Tentar de novo
         </button>
       </div>
@@ -680,7 +680,7 @@ function Checkout({ jobId, valorCentavos }: { jobId: string; valorCentavos: numb
       <div className="space-y-2">
         <p className="text-center text-xs text-[var(--text-muted)]">Até 12x sem juros</p>
         <CardPaymentBrick valorCentavos={valorCentavos} onPagar={pagarComCartao} />
-        {erro && <p className="text-center text-sm text-red-400">{erro}</p>}
+        {erro && <p className="text-center text-sm text-[var(--accent-danger)]">{erro}</p>}
         <button
           onClick={() => setMostrarCartao(false)}
           className="block text-center text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
@@ -710,7 +710,7 @@ function Checkout({ jobId, valorCentavos }: { jobId: string; valorCentavos: numb
           className="w-full justify-center sm:w-auto"
         />
       </button>
-      {erro && <p className="w-full text-center text-sm text-red-400">{erro}</p>}
+      {erro && <p className="w-full text-center text-sm text-[var(--accent-danger)]">{erro}</p>}
     </div>
   );
 }
