@@ -322,7 +322,9 @@ function ResultadoPreview({ resultado }: { resultado: Resultado }) {
           <p className="text-sm text-[var(--text-secondary)]">
             Documento completo: <strong className="text-[var(--text-primary)]">{resultado.paginas_total} página(s)</strong>
           </p>
-          <p className="text-2xl font-bold text-[var(--accent-info)]">{formatarPreco(resultado.preco_centavos)}</p>
+          <p className="inline-block rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-1.5 text-3xl font-extrabold text-white shadow-[0_0_24px_rgba(56,189,248,0.4)]">
+            {formatarPreco(resultado.preco_centavos)}
+          </p>
           {resultado.preco_centavos === PRECO_MINIMO_CENTAVOS ? (
             <p className="text-xs font-medium text-[var(--text-muted)]">
               {formatarPreco(PRECO_MINIMO_CENTAVOS)} é o valor mínimo — vale pra documentos de até{" "}

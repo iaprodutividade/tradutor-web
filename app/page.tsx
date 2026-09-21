@@ -192,8 +192,19 @@ export default function Home() {
               />
             </div>
             <p className="max-w-sm text-center text-sm text-[var(--text-secondary)]">
-              Quanto mais páginas você traduz de uma vez, mais barato fica — o desconto cresce na mesma proporção do
-              volume.
+              Quanto mais páginas você traduz de uma vez,{" "}
+              <span
+                className="font-medium text-[var(--text-primary)]"
+                style={{
+                  backgroundImage: "linear-gradient(120deg, rgba(250,204,21,0.5) 0%, rgba(250,204,21,0.5) 100%)",
+                  backgroundRepeat: "no-repeat",
+                  backgroundSize: "100% 42%",
+                  backgroundPosition: "0 88%",
+                }}
+              >
+                mais barato fica
+              </span>
+              . O desconto cresce na mesma proporção do volume.
             </p>
           </div>
         </div>
