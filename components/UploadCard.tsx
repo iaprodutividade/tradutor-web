@@ -17,6 +17,7 @@ import {
   Minus,
   Plus,
   ShieldCheck,
+  Tag,
 } from "lucide-react";
 import { Card } from "@/components/ui";
 import { AcaoPill } from "@/components/AcaoTile";
@@ -234,12 +235,23 @@ export function UploadCard() {
         </div>
       )}
 
-      {estado === "revelado" && resultado && <ResultadoPreview resultado={resultado} />}
+      {estado === "revelado" && resultado && (
+        <ResultadoPreview
+          resultado={resultado}
+          onPrecoAtualizado={(novoPreco) => setResultado((r) => (r ? { ...r, preco_centavos: novoPreco } : r))}
+        />
+      )}
     </Card>
   );
 }
 
-function ResultadoPreview({ resultado }: { resultado: Resultado }) {
+function ResultadoPreview({
+  resultado,
+  onPrecoAtualizado,
+}: {
+  resultado: Resultado;
+  onPrecoAtualizado: (novoPreco: number) => void;
+}) {
   const [lightbox, setLightbox] = useState(false);
 
   function baixarPdfExemplo() {
@@ -340,7 +352,11 @@ function ResultadoPreview({ resultado }: { resultado: Resultado }) {
           )}
         </div>
 
-        <Checkout jobId={resultado.job_id} valorCentavos={resultado.preco_centavos} />
+        <Checkout
+          jobId={resultado.job_id}
+          valorCentavos={resultado.preco_centavos}
+          onPrecoAtualizado={onPrecoAtualizado}
+        />
       </div>
     </div>
   );
@@ -517,7 +533,15 @@ function BarraProgressoTraducao({
   );
 }
 
-function Checkout({ jobId, valorCentavos }: { jobId: string; valorCentavos: number }) {
+function Checkout({
+  jobId,
+  valorCentavos,
+  onPrecoAtualizado,
+}: {
+  jobId: string;
+  valorCentavos: number;
+  onPrecoAtualizado: (novoPreco: number) => void;
+}) {
   const [etapa, setEtapa] = useState<EtapaCheckout>("escolha");
   const [processandoPix, setProcessandoPix] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -525,6 +549,11 @@ function Checkout({ jobId, valorCentavos }: { jobId: string; valorCentavos: numb
   const [copiado, setCopiado] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [mostrarCartao, setMostrarCartao] = useState(false);
+  const [mostrarCupom, setMostrarCupom] = useState(false);
+  const [codigoCupom, setCodigoCupom] = useState("");
+  const [aplicandoCupom, setAplicandoCupom] = useState(false);
+  const [erroCupom, setErroCupom] = useState<string | null>(null);
+  const [cupomAplicado, setCupomAplicado] = useState<number | null>(null);
   const [progresso, setProgresso] = useState<{
     statusJob: string;
     feitas: number;
@@ -605,6 +634,27 @@ function Checkout({ jobId, valorCentavos }: { jobId: string; valorCentavos: numb
       setEtapa("aguardando");
     } else {
       throw new Error("Pagamento recusado pelo cartão. Tenta outro cartão ou pelo Pix.");
+    }
+  }
+
+  async function aplicarCupom() {
+    if (!codigoCupom.trim()) return;
+    setAplicandoCupom(true);
+    setErroCupom(null);
+    try {
+      const resp = await fetch("/api/cupom/aplicar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: jobId, codigo: codigoCupom }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.erro ?? "Não deu pra aplicar o cupom.");
+      setCupomAplicado(data.desconto_percentual);
+      onPrecoAtualizado(data.preco_centavos);
+    } catch (e) {
+      setErroCupom(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAplicandoCupom(false);
     }
   }
 
@@ -694,24 +744,59 @@ function Checkout({ jobId, valorCentavos }: { jobId: string; valorCentavos: numb
   }
 
   return (
-    <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-      <button onClick={pagarComPix} disabled={processandoPix} className="group w-full sm:w-auto">
-        <AcaoPill
-          cor="violeta"
-          label={processandoPix ? "Gerando Pix..." : "Pagar com Pix"}
-          icon={<QrCode className="h-4 w-4" />}
-          pressionado={processandoPix}
-          className="w-full justify-center sm:w-auto"
-        />
-      </button>
-      <button onClick={() => setMostrarCartao(true)} className="group w-full sm:w-auto">
-        <AcaoPill
-          cor="azul"
-          label="Pagar com cartão (até 12x)"
-          icon={<CreditCard className="h-4 w-4" />}
-          className="w-full justify-center sm:w-auto"
-        />
-      </button>
+    <div className="flex flex-col items-center gap-3">
+      {cupomAplicado !== null ? (
+        <p className="flex items-center gap-1.5 text-sm font-medium text-[var(--accent-success)]">
+          <Tag className="h-4 w-4" /> Cupom aplicado: {cupomAplicado}% de desconto
+        </p>
+      ) : mostrarCupom ? (
+        <div className="flex w-full max-w-xs flex-col gap-2">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={codigoCupom}
+              onChange={(e) => setCodigoCupom(e.target.value)}
+              placeholder="Código do cupom"
+              className="w-full rounded-xl border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-sky-500/60"
+            />
+            <button
+              onClick={aplicarCupom}
+              disabled={aplicandoCupom || !codigoCupom.trim()}
+              className="shrink-0 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50"
+            >
+              {aplicandoCupom ? "..." : "Aplicar"}
+            </button>
+          </div>
+          {erroCupom && <p className="text-xs text-[var(--accent-danger)]">{erroCupom}</p>}
+        </div>
+      ) : (
+        <button
+          onClick={() => setMostrarCupom(true)}
+          className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+        >
+          <Tag className="h-3.5 w-3.5" /> Tenho um cupom
+        </button>
+      )}
+
+      <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+        <button onClick={pagarComPix} disabled={processandoPix} className="group w-full sm:w-auto">
+          <AcaoPill
+            cor="violeta"
+            label={processandoPix ? "Gerando Pix..." : "Pagar com Pix"}
+            icon={<QrCode className="h-4 w-4" />}
+            pressionado={processandoPix}
+            className="w-full justify-center sm:w-auto"
+          />
+        </button>
+        <button onClick={() => setMostrarCartao(true)} className="group w-full sm:w-auto">
+          <AcaoPill
+            cor="azul"
+            label="Pagar com cartão (até 12x)"
+            icon={<CreditCard className="h-4 w-4" />}
+            className="w-full justify-center sm:w-auto"
+          />
+        </button>
+      </div>
       {erro && <p className="w-full text-center text-sm text-[var(--accent-danger)]">{erro}</p>}
     </div>
   );
