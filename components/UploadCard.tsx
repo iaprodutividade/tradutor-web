@@ -18,6 +18,8 @@ import {
   Plus,
   ShieldCheck,
   Tag,
+  Check,
+  Link2,
 } from "lucide-react";
 import { Card } from "@/components/ui";
 import { AcaoPill } from "@/components/AcaoTile";
@@ -133,8 +135,63 @@ export function UploadCard() {
     if (arquivo) buscarPreview(arquivo, origem, codigo);
   }
 
+  // Recuperação de tradução: sem isso, um F5 na tela de pagamento/progresso
+  // perdia o acesso pra sempre (o job_id só existia na memória da página) —
+  // o arquivo ficava pronto no Storage, mas ninguém sabia onde pegar. Agora
+  // o job_id vai pra URL (?job=) assim que o Checkout é criado, e também
+  // fica salvo no navegador como último job, pra oferecer retomar mesmo sem
+  // o link exato.
+  const [jobParaRecuperar, setJobParaRecuperar] = useState<string | null>(null);
+  const [ultimoJobSalvo, setUltimoJobSalvo] = useState<string | null>(null);
+  const [verificandoUrl, setVerificandoUrl] = useState(true);
+
+  useEffect(() => {
+    try {
+      const jobNaUrl = new URLSearchParams(window.location.search).get("job");
+      if (jobNaUrl) {
+        setJobParaRecuperar(jobNaUrl);
+      } else {
+        const salvo = localStorage.getItem("tradutor_ultimo_job");
+        if (salvo) setUltimoJobSalvo(salvo);
+      }
+    } catch {
+      // localStorage bloqueado (aba anônima, etc.) — segue sem recuperação
+    }
+    setVerificandoUrl(false);
+  }, []);
+
+  function sairDaRecuperacao() {
+    try {
+      window.history.replaceState({}, "", window.location.pathname);
+    } catch {
+      // sem problema, só a URL que fica com o parametro a mais
+    }
+    setJobParaRecuperar(null);
+  }
+
+  if (verificandoUrl) return null;
+
+  if (jobParaRecuperar) {
+    return (
+      <Card className="space-y-6">
+        <RecuperarJob jobId={jobParaRecuperar} onComecarDeNovo={sairDaRecuperacao} />
+      </Card>
+    );
+  }
+
   return (
     <Card className="space-y-6">
+      {ultimoJobSalvo && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-3 text-sm">
+          <span className="text-[var(--text-secondary)]">Você tem uma tradução recente em andamento ou pronta.</span>
+          <button
+            onClick={() => setJobParaRecuperar(ultimoJobSalvo)}
+            className="font-medium text-[var(--accent-info)] hover:opacity-75"
+          >
+            Continuar essa tradução
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[1fr_auto_1fr]">
         <label className="block">
           <span className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">Idioma original</span>
@@ -518,6 +575,136 @@ function BarraProgressoTraducao({
   );
 }
 
+// Copia a URL atual (já tem ?job= sincronizado nela) — um jeito de a pessoa
+// guardar/mandar pra si mesma o caminho de volta pra essa tradução, sem
+// depender do navegador/localStorage.
+function CopiarLinkTraducao() {
+  const [copiado, setCopiado] = useState(false);
+
+  function copiar() {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    });
+  }
+
+  return (
+    <button
+      onClick={copiar}
+      className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+    >
+      {copiado ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
+      {copiado ? "Link copiado!" : "Copiar link desta tradução"}
+    </button>
+  );
+}
+
+// Retoma uma tradução a partir só do job_id (URL ou localStorage) — usado
+// quando a pessoa dá F5, fecha a aba ou volta pelo link depois. Não depende
+// de nenhum estado em memória, só do que o job já tem salvo no Supabase.
+function RecuperarJob({ jobId, onComecarDeNovo }: { jobId: string; onComecarDeNovo: () => void }) {
+  const [estado, setEstado] = useState<"carregando" | "aguardando_pagamento" | "processando" | "pronto" | "erro">(
+    "carregando"
+  );
+  const [progresso, setProgresso] = useState<{ feitas: number; total: number; tipoArquivo: string } | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [nomeArquivo, setNomeArquivo] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    let intervalo: ReturnType<typeof setInterval>;
+
+    async function checar() {
+      try {
+        const resp = await fetch(`/api/jobs/${jobId}`);
+        if (!resp.ok) {
+          setErro("Não encontramos essa tradução — pode já ter expirado.");
+          setEstado("erro");
+          clearInterval(intervalo);
+          return;
+        }
+        const data = await resp.json();
+        setNomeArquivo(data.nome_arquivo ?? null);
+
+        if (data.status === "pronto") {
+          setDownloadUrl(data.download_url);
+          setEstado("pronto");
+          clearInterval(intervalo);
+        } else if (data.status === "erro") {
+          setErro(data.erro_mensagem ?? "Deu erro ao processar o documento. Fala com a gente.");
+          setEstado("erro");
+          clearInterval(intervalo);
+        } else if (data.status === "aguardando_pagamento") {
+          setEstado("aguardando_pagamento");
+        } else {
+          setEstado("processando");
+          setProgresso({
+            feitas: data.unidades_processadas ?? 0,
+            total: data.unidades_total ?? 0,
+            tipoArquivo: data.tipo_arquivo ?? "pdf",
+          });
+        }
+      } catch {
+        // rede instável — tenta de novo no próximo tick
+      }
+    }
+
+    checar();
+    intervalo = setInterval(checar, 4000);
+    return () => clearInterval(intervalo);
+  }, [jobId]);
+
+  if (estado === "carregando") {
+    return (
+      <p className="flex items-center justify-center gap-2 py-6 text-sm text-[var(--text-secondary)]">
+        <Loader2 className="h-4 w-4 animate-spin" /> Buscando sua tradução...
+      </p>
+    );
+  }
+
+  if (estado === "processando" && progresso) {
+    return <BarraProgressoTraducao progresso={progresso} />;
+  }
+
+  if (estado === "pronto") {
+    return (
+      <div className="flex flex-col items-center gap-3 py-4 text-center">
+        <p className="text-sm font-medium text-[var(--accent-success)]">
+          {nomeArquivo ? `"${nomeArquivo}" está pronto!` : "Seu documento está pronto!"}
+        </p>
+        {downloadUrl ? (
+          <a href={downloadUrl} target="_blank" rel="noreferrer">
+            <AcaoPill cor="esmeralda" label="Baixar documento traduzido" icon={<Download className="h-4 w-4" />} />
+          </a>
+        ) : (
+          <p className="text-sm text-[var(--text-muted)]">Gerando o link de download...</p>
+        )}
+        <CopiarLinkTraducao />
+      </div>
+    );
+  }
+
+  if (estado === "aguardando_pagamento") {
+    return (
+      <div className="flex flex-col items-center gap-3 py-4 text-center">
+        <p className="text-sm text-[var(--text-secondary)]">Essa tradução ainda não foi paga.</p>
+        <button onClick={onComecarDeNovo} className="text-sm font-medium text-[var(--accent-info)] hover:opacity-75">
+          Começar de novo
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3 py-4 text-center">
+      <p className="text-sm font-medium text-[var(--accent-danger)]">{erro}</p>
+      <button onClick={onComecarDeNovo} className="text-sm font-medium text-[var(--accent-info)] hover:opacity-75">
+        Começar de novo
+      </button>
+    </div>
+  );
+}
+
 function Checkout({
   jobId,
   valorCentavos,
@@ -545,6 +732,20 @@ function Checkout({
     total: number;
     tipoArquivo: string;
   } | null>(null);
+
+  // Salva o job_id assim que a tela de pagamento existe — se a pessoa der
+  // F5 ou fechar a aba, o link (?job=) ou o navegador (localStorage) trazem
+  // ela de volta pro mesmo lugar, mesmo depois de já ter pago.
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("job", jobId);
+      window.history.replaceState({}, "", url);
+      localStorage.setItem("tradutor_ultimo_job", jobId);
+    } catch {
+      // localStorage/history bloqueados (aba anônima, etc.) — sem recuperação, mas não quebra nada
+    }
+  }, [jobId]);
 
   useEffect(() => {
     if (etapa !== "aguardando") return;
@@ -683,6 +884,7 @@ function Checkout({
         ) : (
           <p className="text-sm text-[var(--text-muted)]">Gerando o link de download...</p>
         )}
+        <CopiarLinkTraducao />
       </div>
     );
   }
