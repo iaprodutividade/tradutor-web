@@ -22,6 +22,7 @@ import {
   Link2,
   Mail,
   Send,
+  ImageOff,
 } from "lucide-react";
 import { Card } from "@/components/ui";
 import { AcaoPill } from "@/components/AcaoTile";
@@ -419,7 +420,17 @@ function ResultadoPreview({
   );
 }
 
-type EstadoAviso = "escolhendo" | "form_tem_original" | "form_interesse" | "enviado";
+type EstadoAviso = "calculando" | "escolhendo" | "form_tem_original" | "form_interesse" | "enviado";
+
+// Mensagens mostradas enquanto "calcula o orçamento" — a análise (detectar
+// que o PDF não tem texto extraível) já rodou de verdade no backend antes
+// disso; essa etapa só torna visível pro visitante que teve trabalho
+// analisando o arquivo, em vez de aparecer tudo instantâneo.
+const MENSAGENS_CALCULANDO = [
+  "Analisando as páginas do documento...",
+  "Verificando o que dá pra recuperar do arquivo...",
+  "Calculando o orçamento do processamento especial...",
+];
 
 // Mostrado quando o backend detecta que o PDF não tem texto extraível (é
 // imagem/foto achatada, não um documento real) — caso descoberto com um
@@ -429,11 +440,39 @@ type EstadoAviso = "escolhendo" | "form_tem_original" | "form_interesse" | "envi
 // existe, sem cobrar nada ainda — o processamento especial pra esse tipo de
 // arquivo ainda não foi construído.
 function AvisoPdfImagem({ paginasTotal, nomeArquivo }: { paginasTotal: number; nomeArquivo: string }) {
-  const [estado, setEstado] = useState<EstadoAviso>("escolhendo");
+  const [estado, setEstado] = useState<EstadoAviso>("calculando");
+  const [mensagemIndice, setMensagemIndice] = useState(0);
   const [email, setEmail] = useState("");
   const [detalhe, setDetalhe] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Duração proporcional ao tamanho do documento (mais páginas, mais
+    // "trabalho" pra analisar), entre 15 e 20s como combinado.
+    const duracaoMs = Math.min(20000, 15000 + paginasTotal * 200);
+    const passoMs = duracaoMs / MENSAGENS_CALCULANDO.length;
+
+    const intervalo = setInterval(() => {
+      setMensagemIndice((i) => Math.min(i + 1, MENSAGENS_CALCULANDO.length - 1));
+    }, passoMs);
+    const fim = setTimeout(() => setEstado("escolhendo"), duracaoMs);
+
+    return () => {
+      clearInterval(intervalo);
+      clearTimeout(fim);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (estado === "calculando") {
+    return (
+      <div className="space-y-4 border-t border-[var(--border)] pt-6 text-center">
+        <Loader2 className="mx-auto h-6 w-6 animate-spin text-[var(--accent-info)]" />
+        <p className="text-sm text-[var(--text-secondary)]">{MENSAGENS_CALCULANDO[mensagemIndice]}</p>
+      </div>
+    );
+  }
 
   async function enviar(tipoPedido: "tem_original" | "quer_orcamento") {
     setEnviando(true);
@@ -472,20 +511,21 @@ function AvisoPdfImagem({ paginasTotal, nomeArquivo }: { paginasTotal: number; n
   }
 
   return (
-    <div className="space-y-5 border-t border-[var(--border)] pt-6 text-center">
-      <div className="mx-auto max-w-md space-y-2">
-        <p className="text-sm font-semibold text-[var(--text-primary)]">
-          Esse arquivo não é um PDF editável — é uma imagem (foto/scan de {paginasTotal} página(s))
-        </p>
+    <div className="space-y-5 border-t border-[var(--border)] pt-6">
+      <div className="mx-auto max-w-md space-y-2 text-left">
+        <div className="flex items-center gap-2">
+          <ImageOff className="h-5 w-5 shrink-0 text-[var(--accent-info)]" />
+          <p className="text-sm font-semibold text-[var(--text-primary)]">Esse arquivo não é um PDF editável</p>
+        </div>
         <p className="text-sm text-[var(--text-secondary)]">
-          Nenhuma ferramenta do mercado detecta isso automaticamente hoje — a maioria simplesmente devolveria o
-          documento intocado, sem avisar. A nossa consegue processar, mas é um processo mais lento e mais caro que o
-          normal.
+          É uma imagem (foto ou digitalização) de {paginasTotal} página(s). Nenhuma ferramenta do mercado detecta
+          isso automaticamente hoje. A maioria simplesmente devolve o documento intocado, sem avisar. A nossa
+          consegue processar, mas é um processo mais lento e mais caro que o normal.
         </p>
       </div>
 
       {estado === "escolhendo" && (
-        <div className="mx-auto max-w-md space-y-3">
+        <div className="mx-auto max-w-md space-y-3 text-left">
           <p className="text-sm text-[var(--text-secondary)]">
             Antes de qualquer coisa: você tem o arquivo ou link editável original desse documento (Canva, PowerPoint,
             InDesign, Photoshop etc.)?
@@ -504,8 +544,8 @@ function AvisoPdfImagem({ paginasTotal, nomeArquivo }: { paginasTotal: number; n
       {estado === "form_tem_original" && (
         <div className="mx-auto max-w-md space-y-3 text-left">
           <p className="text-sm text-[var(--text-secondary)]">
-            Ótimo — com o arquivo original a tradução costuma ser bem mais rápida e barata. Deixa seu e-mail e, se
-            quiser, o link do design que a gente entra em contato.
+            Ótimo. Com o arquivo original a tradução costuma ser bem mais rápida e barata. Deixa seu e-mail e, se
+            quiser, o link do design, que a gente entra em contato.
           </p>
           <CampoEmailDetalhe
             email={email}
