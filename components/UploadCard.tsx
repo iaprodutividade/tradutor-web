@@ -782,6 +782,19 @@ function RecuperarJob({ jobId, onComecarDeNovo }: { jobId: string; onComecarDeNo
   );
 }
 
+// Dispara o evento de conversão do Google Ads uma única vez por checkout —
+// o ref garante isso mesmo com o polling batendo a cada 4s.
+function dispararConversaoAdsUmaVez(jaDisparouRef: { current: boolean }, valorCentavos: number) {
+  if (jaDisparouRef.current) return;
+  jaDisparouRef.current = true;
+  const gtag = (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag;
+  gtag?.("event", "conversion", {
+    send_to: "AW-18468969186/TMboCMuA6oEdEOK12OZE",
+    value: valorCentavos / 100,
+    currency: "BRL",
+  });
+}
+
 function Checkout({
   jobId,
   valorCentavos,
@@ -809,6 +822,7 @@ function Checkout({
     total: number;
     tipoArquivo: string;
   } | null>(null);
+  const conversaoDisparadaRef = useRef(false);
 
   // Salva o job_id assim que a tela de pagamento existe — se a pessoa der
   // F5 ou fechar a aba, o link (?job=) ou o navegador (localStorage) trazem
@@ -831,6 +845,7 @@ function Checkout({
         const resp = await fetch(`/api/jobs/${jobId}`);
         const data = await resp.json();
         if (data.status === "pronto") {
+          dispararConversaoAdsUmaVez(conversaoDisparadaRef, valorCentavos);
           setDownloadUrl(data.download_url);
           setEtapa("pronto");
           clearInterval(intervalo);
@@ -839,6 +854,12 @@ function Checkout({
           setEtapa("erro");
           clearInterval(intervalo);
         } else {
+          // Pagamento em Pix ainda não confirmado continua caindo aqui —
+          // só conta como conversão quando sai de "aguardando_pagamento"
+          // (webhook confirmou e o job virou "pago"/"processando").
+          if (data.status !== "aguardando_pagamento") {
+            dispararConversaoAdsUmaVez(conversaoDisparadaRef, valorCentavos);
+          }
           setProgresso({
             statusJob: data.status,
             feitas: data.unidades_processadas ?? 0,
@@ -851,7 +872,7 @@ function Checkout({
       }
     }, 4000);
     return () => clearInterval(intervalo);
-  }, [etapa, jobId]);
+  }, [etapa, jobId, valorCentavos]);
 
   // Sem formulário: o Pix só precisa do job_id (o backend gera um e-mail
   // sintético) e o cartão usa o Brick da própria Mercado Pago, que já pede

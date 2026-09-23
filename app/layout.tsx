@@ -1,10 +1,16 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { AmbientGlow } from "@/components/ambient-glow";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
+
+// IDs da campanha de Google Ads/GA4 do Tradutor — o evento de conversão em
+// si dispara em components/UploadCard.tsx (checkout confirmado).
+export const GA4_MEASUREMENT_ID = "G-RSB31WFXHJ";
+export const ADS_CONVERSION_ID = "AW-18468969186";
 
 // Se a pessoa já escolheu um tema antes, respeita a escolha salva. Na
 // primeira visita (nada salvo ainda), respeita a preferência do sistema
@@ -47,6 +53,19 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA_INICIAL }} />
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA4_MEASUREMENT_ID}`}
+          strategy="afterInteractive"
+        />
+        <Script id="gtag-init" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GA4_MEASUREMENT_ID}');
+            gtag('config', '${ADS_CONVERSION_ID}');
+          `}
+        </Script>
       </head>
       <body suppressHydrationWarning className="flex min-h-full flex-col bg-[var(--bg-page)] text-[var(--text-primary)]">
         <ThemeProvider>
