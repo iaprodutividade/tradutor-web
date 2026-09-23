@@ -33,6 +33,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data, { status: resp.status });
   }
 
+  // PDF sem texto extraível (imagem pura) — não há nada pra processar/cobrar
+  // ainda, então não sobe o arquivo pro Storage nem cria job. O frontend
+  // mostra o aviso e captura interesse pela caixa de sugestão existente.
+  if (data.tipo === "pdf_sem_texto") {
+    return NextResponse.json(data, { status: resp.status });
+  }
+
   const extensao = arquivo.name.split(".").pop()?.toLowerCase() ?? "pdf";
   const supabase = createAdminClient();
   const jobId = crypto.randomUUID();

@@ -21,6 +21,7 @@ import {
   Check,
   Link2,
   Mail,
+  Send,
 } from "lucide-react";
 import { Card } from "@/components/ui";
 import { AcaoPill } from "@/components/AcaoTile";
@@ -51,7 +52,13 @@ type ResultadoDocx = {
   imagem_traduzida_base64: string;
 };
 
-type Resultado = ResultadoPdf | ResultadoDocx;
+type ResultadoPdfSemTexto = {
+  tipo: "pdf_sem_texto";
+  paginas_total: number;
+  imagem_original_base64: string;
+};
+
+type Resultado = ResultadoPdf | ResultadoDocx | ResultadoPdfSemTexto;
 
 function formatarPreco(centavos: number) {
   return (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -298,6 +305,7 @@ export function UploadCard() {
       {estado === "revelado" && resultado && (
         <ResultadoPreview
           resultado={resultado}
+          nomeArquivo={arquivo?.name ?? ""}
           onPrecoAtualizado={(novoPreco) => setResultado((r) => (r ? { ...r, preco_centavos: novoPreco } : r))}
         />
       )}
@@ -307,12 +315,18 @@ export function UploadCard() {
 
 function ResultadoPreview({
   resultado,
+  nomeArquivo,
   onPrecoAtualizado,
 }: {
   resultado: Resultado;
+  nomeArquivo: string;
   onPrecoAtualizado: (novoPreco: number) => void;
 }) {
   const [lightbox, setLightbox] = useState(false);
+
+  if (resultado.tipo === "pdf_sem_texto") {
+    return <AvisoPdfImagem paginasTotal={resultado.paginas_total} nomeArquivo={nomeArquivo} />;
+  }
 
   function baixarPdfExemplo() {
     if (resultado.tipo !== "pdf") return;
@@ -401,6 +415,169 @@ function ResultadoPreview({
           onPrecoAtualizado={onPrecoAtualizado}
         />
       </div>
+    </div>
+  );
+}
+
+type EstadoAviso = "escolhendo" | "form_tem_original" | "form_interesse" | "enviado";
+
+// Mostrado quando o backend detecta que o PDF não tem texto extraível (é
+// imagem/foto achatada, não um documento real) — caso descoberto com um
+// catálogo real que nenhuma ferramenta do mercado conseguiu traduzir. Em vez
+// de fingir uma prévia (que sairia idêntica ao original, sem traduzir nada),
+// explica a limitação e captura o interesse via a caixa de sugestão que já
+// existe, sem cobrar nada ainda — o processamento especial pra esse tipo de
+// arquivo ainda não foi construído.
+function AvisoPdfImagem({ paginasTotal, nomeArquivo }: { paginasTotal: number; nomeArquivo: string }) {
+  const [estado, setEstado] = useState<EstadoAviso>("escolhendo");
+  const [email, setEmail] = useState("");
+  const [detalhe, setDetalhe] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function enviar(tipoPedido: "tem_original" | "quer_orcamento") {
+    setEnviando(true);
+    setErro(null);
+    try {
+      const prefixo = tipoPedido === "tem_original" ? "[PDF-imagem: tem o original]" : "[PDF-imagem: quer orçamento]";
+      const mensagem = [
+        `${prefixo} Arquivo: "${nomeArquivo}" (${paginasTotal} página(s)).`,
+        detalhe ? `Detalhe: ${detalhe}` : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      const resp = await fetch("/api/sugestoes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, mensagem }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.erro ?? "Não deu pra enviar. Tenta de novo.");
+      setEstado("enviado");
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  if (estado === "enviado") {
+    return (
+      <div className="space-y-4 border-t border-[var(--border)] pt-6 text-center">
+        <Check className="mx-auto h-8 w-8 text-[var(--accent-success)]" />
+        <p className="text-sm font-medium text-[var(--text-primary)]">Recebemos! Vamos te chamar por esse e-mail em breve.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5 border-t border-[var(--border)] pt-6 text-center">
+      <div className="mx-auto max-w-md space-y-2">
+        <p className="text-sm font-semibold text-[var(--text-primary)]">
+          Esse arquivo não é um PDF editável — é uma imagem (foto/scan de {paginasTotal} página(s))
+        </p>
+        <p className="text-sm text-[var(--text-secondary)]">
+          Nenhuma ferramenta do mercado detecta isso automaticamente hoje — a maioria simplesmente devolveria o
+          documento intocado, sem avisar. A nossa consegue processar, mas é um processo mais lento e mais caro que o
+          normal.
+        </p>
+      </div>
+
+      {estado === "escolhendo" && (
+        <div className="mx-auto max-w-md space-y-3">
+          <p className="text-sm text-[var(--text-secondary)]">
+            Antes de qualquer coisa: você tem o arquivo ou link editável original desse documento (Canva, PowerPoint,
+            InDesign, Photoshop etc.)?
+          </p>
+          <div className="flex flex-col justify-center gap-2 sm:flex-row">
+            <button onClick={() => setEstado("form_tem_original")} className="group">
+              <AcaoPill cor="esmeralda" label="Sim, eu tenho" className="w-full justify-center sm:w-auto" />
+            </button>
+            <button onClick={() => setEstado("form_interesse")} className="group">
+              <AcaoPill cor="azul" label="Não tenho, quero o orçamento" className="w-full justify-center sm:w-auto" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {estado === "form_tem_original" && (
+        <div className="mx-auto max-w-md space-y-3 text-left">
+          <p className="text-sm text-[var(--text-secondary)]">
+            Ótimo — com o arquivo original a tradução costuma ser bem mais rápida e barata. Deixa seu e-mail e, se
+            quiser, o link do design que a gente entra em contato.
+          </p>
+          <CampoEmailDetalhe
+            email={email}
+            setEmail={setEmail}
+            detalhe={detalhe}
+            setDetalhe={setDetalhe}
+            placeholderDetalhe="Link do Canva/design (opcional)"
+          />
+          {erro && <p className="text-sm text-[var(--accent-danger)]">{erro}</p>}
+          <div className="flex justify-center pt-1">
+            <button onClick={() => enviar("tem_original")} disabled={enviando || !email} className="group w-full sm:w-auto">
+              <AcaoPill cor="esmeralda" label={enviando ? "Enviando..." : "Enviar"} icon={<Send />} className="w-full justify-center sm:w-auto" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {estado === "form_interesse" && (
+        <div className="mx-auto max-w-md space-y-3 text-left">
+          <p className="text-sm text-[var(--text-secondary)]">
+            Sem problema. Deixa seu e-mail que a gente te chama com o orçamento assim que o processamento especial
+            pra esse tipo de arquivo estiver pronto.
+          </p>
+          <CampoEmailDetalhe
+            email={email}
+            setEmail={setEmail}
+            detalhe={detalhe}
+            setDetalhe={setDetalhe}
+            placeholderDetalhe="Algo mais que queira contar (opcional)"
+          />
+          {erro && <p className="text-sm text-[var(--accent-danger)]">{erro}</p>}
+          <div className="flex justify-center pt-1">
+            <button onClick={() => enviar("quer_orcamento")} disabled={enviando || !email} className="group w-full sm:w-auto">
+              <AcaoPill cor="azul" label={enviando ? "Enviando..." : "Quero o orçamento"} icon={<Send />} className="w-full justify-center sm:w-auto" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CampoEmailDetalhe({
+  email,
+  setEmail,
+  detalhe,
+  setDetalhe,
+  placeholderDetalhe,
+}: {
+  email: string;
+  setEmail: (v: string) => void;
+  detalhe: string;
+  setDetalhe: (v: string) => void;
+  placeholderDetalhe: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <input
+        type="email"
+        required
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Seu e-mail"
+        className="w-full rounded-xl border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:border-sky-500/60"
+      />
+      <input
+        type="text"
+        value={detalhe}
+        onChange={(e) => setDetalhe(e.target.value)}
+        placeholder={placeholderDetalhe}
+        className="w-full rounded-xl border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:border-sky-500/60"
+      />
     </div>
   );
 }
