@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buscarPagamento } from "@/lib/mercadopago";
 import { dispararProcessamentoCompleto } from "@/lib/tradutor-processamento";
+import { enviarAlertaWhatsApp, montarMensagemVenda } from "@/lib/whatsapp-alerta";
 
 // Webhook do Mercado Pago — só avisa o id do pagamento (topic=payment),
 // então buscamos os detalhes de verdade na API antes de confirmar. Único
@@ -50,6 +51,25 @@ export async function POST(req: NextRequest) {
       if (job && job.status === "aguardando_pagamento") {
         await supabase.from("jobs").update({ status: "pago" }).eq("id", jobId);
         await dispararProcessamentoCompleto(jobId);
+
+        // Melhor-esforço — nunca deixa uma falha no WhatsApp derrubar o
+        // webhook de pagamento de verdade.
+        try {
+          await enviarAlertaWhatsApp(
+            montarMensagemVenda({
+              nomeArquivo: job.nome_arquivo,
+              idiomaOrigem: job.idioma_origem,
+              idiomaDestino: job.idioma_destino,
+              paginasTotal: job.paginas_total,
+              valorCentavos: pagamento.valorCentavos,
+              metodo: pagamento.metodo,
+              parcelas: pagamento.parcelas,
+              cupomCodigo: job.cupom_codigo ?? null,
+            })
+          );
+        } catch {
+          // ignora — o painel de pagamentos é a fonte de verdade
+        }
       }
     }
 
