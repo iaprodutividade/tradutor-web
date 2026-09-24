@@ -460,6 +460,9 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
   const [precoCentavos, setPrecoCentavos] = useState<number | null>(null);
   const [imagensUrls, setImagensUrls] = useState<string[]>([]);
   const [erroMensagem, setErroMensagem] = useState<string | null>(null);
+  // Progresso real (páginas processadas/total), não simulado — o backend já
+  // atualiza isso a cada página via unidades_processadas/unidades_total.
+  const [progresso, setProgresso] = useState<{ feitas: number; total: number } | null>(null);
 
   // Dispara o processamento real (OCR + inpaint + tradução) assim que o
   // aviso aparece — uma única vez por job, mesmo que o componente re-renderize.
@@ -500,6 +503,8 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
         } else if (data.status === "erro") {
           setErroMensagem(data.erro_mensagem ?? "Deu erro ao processar o documento. Fala com a gente.");
           setEstado("erro");
+        } else if (data.unidades_total > 0) {
+          setProgresso({ feitas: data.unidades_processadas ?? 0, total: data.unidades_total });
         }
       } catch {
         // rede instável — tenta de novo no próximo tick
@@ -509,22 +514,44 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
   }, [estado, jobId]);
 
   if (estado === "processando") {
+    const percentual = progresso ? Math.round((progresso.feitas / progresso.total) * 100) : 0;
     return (
       <div className="space-y-5 border-t border-[var(--border)] pt-6">
         <div className="mx-auto max-w-md space-y-2 text-left">
           <div className="flex items-center gap-2">
             <ImageOff className="h-5 w-5 shrink-0 text-[var(--accent-info)]" />
-            <p className="text-sm font-semibold text-[var(--text-primary)]">Esse arquivo não é um PDF editável</p>
+            <p className="text-base font-semibold text-[var(--text-primary)]">Esse arquivo não é um PDF editável</p>
           </div>
-          <p className="text-sm text-[var(--text-secondary)]">
+          <p className="text-base text-[var(--text-secondary)]">
             É uma imagem (foto ou digitalização) de {paginasTotal} página(s). Nenhuma ferramenta do mercado detecta
             isso automaticamente hoje. A maioria simplesmente devolve o documento intocado, sem avisar. A nossa
             consegue processar — é mais lento e mais caro que o normal, mas já está rodando de verdade.
           </p>
         </div>
-        <div className="mx-auto max-w-md space-y-4 pt-2 text-center">
-          <IconeIaProcessando className="h-10 w-10" />
-          <p className="text-sm text-[var(--text-secondary)]">{MENSAGENS_PROCESSANDO[mensagemIndice]}</p>
+
+        <div className="mx-auto max-w-md space-y-4 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-5">
+          <p className="flex items-center gap-2 text-sm font-medium text-[var(--accent-success)]">
+            <Check className="h-4 w-4 shrink-0" /> Arquivo enviado
+          </p>
+
+          {progresso ? (
+            <div className="space-y-2">
+              <div className="h-3 w-full overflow-hidden rounded-full bg-[var(--surface-3)] ring-1 ring-[var(--border)]">
+                <div
+                  className="progresso-brilho h-full rounded-full bg-gradient-to-r from-sky-500 to-blue-600 shadow-[0_0_10px_rgba(56,189,248,0.55)] transition-[width] duration-700 ease-out"
+                  style={{ width: `${percentual}%` }}
+                />
+              </div>
+              <p className="text-base font-medium text-[var(--text-primary)]">
+                Processando página {progresso.feitas} de {progresso.total} — {percentual}%
+              </p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <IconeIaProcessando className="h-8 w-8 shrink-0" />
+              <p className="text-base text-[var(--text-secondary)]">{MENSAGENS_PROCESSANDO[mensagemIndice]}</p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -533,7 +560,7 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
   if (estado === "erro") {
     return (
       <div className="space-y-4 border-t border-[var(--border)] pt-6 text-center">
-        <p className="text-sm font-medium text-[var(--accent-danger)]">{erroMensagem}</p>
+        <p className="text-base font-medium text-[var(--accent-danger)]">{erroMensagem}</p>
       </div>
     );
   }
@@ -542,10 +569,10 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
     <div className="space-y-5 border-t border-[var(--border)] pt-6">
       <div className="mx-auto max-w-md space-y-2 text-left">
         <div className="flex items-center gap-2">
-          <ImageOff className="h-5 w-5 shrink-0 text-[var(--accent-info)]" />
-          <p className="text-sm font-semibold text-[var(--text-primary)]">Prévia pronta</p>
+          <Check className="h-5 w-5 shrink-0 text-[var(--accent-success)]" />
+          <p className="text-base font-semibold text-[var(--text-primary)]">Prévia pronta</p>
         </div>
-        <p className="text-sm text-[var(--text-secondary)]">
+        <p className="text-base text-[var(--text-secondary)]">
           Esse arquivo é uma imagem, não um PDF editável — mesmo assim conseguimos traduzir. Veja como ficou:
         </p>
       </div>
@@ -557,7 +584,7 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
               key={url}
               src={url}
               alt={`Prévia traduzida — página ${i + 1}`}
-              className="w-full rounded-xl border border-[var(--border)]"
+              className="w-full rounded-xl border-2 border-[var(--accent-success)]/40 shadow-[0_0_12px_rgba(34,197,94,0.15)]"
             />
           ))}
         </div>
@@ -566,7 +593,7 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
       {precoCentavos != null && (
         <div className="space-y-5 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-5">
           <div className="flex flex-col items-center gap-2 text-center">
-            <p className="text-sm text-[var(--text-secondary)]">
+            <p className="text-base text-[var(--text-secondary)]">
               Documento completo: <strong className="text-[var(--text-primary)]">{paginasTotal} página(s)</strong>
             </p>
             <p className="inline-block rounded-2xl bg-gradient-to-b from-sky-500 to-blue-600 px-6 py-2 text-3xl font-extrabold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.4),0_0_16px_3px_rgba(56,189,248,0.5),inset_0_1px_0_rgba(255,255,255,0.5),inset_0_-3px_5px_rgba(0,0,0,0.35),0_4px_10px_rgba(0,0,0,0.4)]">
@@ -734,7 +761,7 @@ function BarraProgressoTraducao({
         <div className="h-3 w-full overflow-hidden rounded-full bg-[var(--surface-2)] ring-1 ring-[var(--border)]">
           <div
             className={`h-full rounded-full bg-gradient-to-r from-sky-500 to-blue-600 shadow-[0_0_10px_rgba(56,189,248,0.55)] transition-[width] duration-700 ease-out ${
-              temTotal ? "" : "w-1/3 animate-pulse"
+              temTotal ? "progresso-brilho" : "w-1/3 animate-pulse"
             }`}
             style={temTotal ? { width: `${percentual}%` } : undefined}
           />
@@ -1255,9 +1282,9 @@ function Checkout({
             <button
               onClick={aplicarCupom}
               disabled={aplicandoCupom || !codigoCupom.trim()}
-              className="shrink-0 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50"
+              className="group shrink-0 disabled:opacity-40"
             >
-              {aplicandoCupom ? "..." : "Aplicar"}
+              <AcaoPill cor="esmeralda" label={aplicandoCupom ? "..." : "Aplicar"} className="!px-4 !py-2" />
             </button>
           </div>
           {erroCupom && <p className="text-xs text-[var(--accent-danger)]">{erroCupom}</p>}

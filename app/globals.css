@@ -96,3 +96,32 @@ body {
   background: var(--bg-page);
   color: var(--foreground);
 }
+
+/* Brilho que varre a barra de progresso continuamente — sem isso, a barra
+   só se move quando uma página termina de processar (pode levar 30-60s por
+   página no pipeline de PDF-imagem), e no meio do caminho parece travada
+   mesmo estando processando de verdade. O brilho não mexe na largura real
+   (isso continua vindo do progresso de páginas de verdade), só sinaliza
+   "ainda vivo" enquanto espera a próxima atualização real. */
+@keyframes progresso-brilho {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.progresso-brilho {
+  position: relative;
+  overflow: hidden;
+}
+
+.progresso-brilho::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  animation: progresso-brilho 1.6s ease-in-out infinite;
+}
