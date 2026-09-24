@@ -16,6 +16,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
 
   let previaImagemUrls: string[] | null = null;
+  let previaImagemOriginalUrls: string[] | null = null;
   if (job.status === "previa_imagem_pronta" && Array.isArray(job.previas_imagem_paths)) {
     const assinadas = await Promise.all(
       (job.previas_imagem_paths as string[]).map((caminho) =>
@@ -23,6 +24,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       )
     );
     previaImagemUrls = assinadas.map((r) => r.data?.signedUrl).filter((u): u is string => Boolean(u));
+
+    if (Array.isArray(job.previas_imagem_originais_paths)) {
+      const assinadasOriginais = await Promise.all(
+        (job.previas_imagem_originais_paths as string[]).map((caminho) =>
+          supabase.storage.from(BUCKET_ARQUIVOS).createSignedUrl(caminho, 60 * 30)
+        )
+      );
+      previaImagemOriginalUrls = assinadasOriginais.map((r) => r.data?.signedUrl).filter((u): u is string => Boolean(u));
+    }
   }
 
   let downloadUrl: string | null = null;
@@ -52,5 +62,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     unidades_total: job.unidades_total,
     preco_centavos: job.preco_centavos,
     previa_imagem_urls: previaImagemUrls,
+    previa_imagem_original_urls: previaImagemOriginalUrls,
+    paginas_gratis: Array.isArray(job.paginas_gratis_indices) ? job.paginas_gratis_indices : [],
   });
 }

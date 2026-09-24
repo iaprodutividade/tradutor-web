@@ -446,6 +446,42 @@ function IconeIaProcessando({ className = "h-6 w-6" }: { className?: string }) {
   );
 }
 
+// Carimba uma marca d'água diagonal repetida por cima da imagem da prévia
+// antes do download — busca os bytes via fetch (não via <img crossOrigin>,
+// que tainta o canvas quando a URL assinada do Storage não manda CORS)
+// e desenha em cima com createImageBitmap, sem depender de nenhum estado
+// de componente.
+async function marcarDaguaPagina(url: string): Promise<Blob> {
+  const resp = await fetch(url);
+  const bitmap = await createImageBitmap(await resp.blob());
+
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas indisponível");
+
+  ctx.drawImage(bitmap, 0, 0);
+  ctx.save();
+  ctx.globalAlpha = 0.16;
+  ctx.fillStyle = "#000000";
+  ctx.font = `${Math.round(canvas.width / 16)}px sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(-Math.PI / 6);
+  const texto = "PRÉVIA · NÃO PAGO · plataformafacil.com.br";
+  const passo = canvas.width / 4;
+  for (let y = -canvas.height; y < canvas.height * 2; y += passo) {
+    ctx.fillText(texto, 0, y);
+  }
+  ctx.restore();
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("falha ao gerar imagem"))), "image/png");
+  });
+}
+
 // Mostrado quando o backend detecta que o PDF não tem texto extraível (é
 // imagem/foto achatada, não um documento real) — caso descoberto com um
 // catálogo real que nenhuma ferramenta do mercado conseguiu traduzir. Em vez
@@ -459,7 +495,11 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
   const [mensagemIndice, setMensagemIndice] = useState(0);
   const [precoCentavos, setPrecoCentavos] = useState<number | null>(null);
   const [imagensUrls, setImagensUrls] = useState<string[]>([]);
+  const [imagensOriginaisUrls, setImagensOriginaisUrls] = useState<string[]>([]);
+  const [paginasGratis, setPaginasGratis] = useState<number[]>([]);
   const [erroMensagem, setErroMensagem] = useState<string | null>(null);
+  const [paginaLightbox, setPaginaLightbox] = useState<number | null>(null);
+  const [baixando, setBaixando] = useState(false);
   // Progresso real (páginas processadas/total), não simulado — o backend já
   // atualiza isso a cada página via unidades_processadas/unidades_total.
   const [progresso, setProgresso] = useState<{ feitas: number; total: number } | null>(null);
@@ -499,6 +539,8 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
         if (data.status === "previa_imagem_pronta") {
           setPrecoCentavos(data.preco_centavos ?? null);
           setImagensUrls(Array.isArray(data.previa_imagem_urls) ? data.previa_imagem_urls : []);
+          setImagensOriginaisUrls(Array.isArray(data.previa_imagem_original_urls) ? data.previa_imagem_original_urls : []);
+          setPaginasGratis(Array.isArray(data.paginas_gratis) ? data.paginas_gratis : []);
           setEstado("pronto");
         } else if (data.status === "erro") {
           setErroMensagem(data.erro_mensagem ?? "Deu erro ao processar o documento. Fala com a gente.");
@@ -543,7 +585,7 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
                 />
               </div>
               <p className="text-base font-medium text-[var(--text-primary)]">
-                Processando página {progresso.feitas} de {progresso.total} — {percentual}%
+                Processando {progresso.feitas} de {progresso.total} páginas da prévia grátis ({percentual}%)
               </p>
             </div>
           ) : (
@@ -565,6 +607,39 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
     );
   }
 
+  // Baixa a prévia com marca d'água (imagem por imagem, ou um .zip quando
+  // tem mais de uma página) — sem isso, alguém poderia fatiar o documento
+  // original em blocos de N páginas e ganhar o documento inteiro traduzido
+  // de graça, prévia por prévia, nunca pagando. O documento pago de
+  // verdade (pós-Pix) não passa por aqui, sai limpo.
+  async function baixarPreviaComMarcaDagua() {
+    setBaixando(true);
+    try {
+      const blobs = await Promise.all(imagensUrls.map(marcarDaguaPagina));
+      if (blobs.length === 1) {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blobs[0]);
+        link.download = "previa-traduzida.png";
+        link.click();
+        URL.revokeObjectURL(link.href);
+      } else {
+        const JSZip = (await import("jszip")).default;
+        const zip = new JSZip();
+        blobs.forEach((blob, i) => zip.file(`pagina-${i + 1}-previa.png`, blob));
+        const conteudo = await zip.generateAsync({ type: "blob" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(conteudo);
+        link.download = "previa-traduzida.zip";
+        link.click();
+        URL.revokeObjectURL(link.href);
+      }
+    } catch {
+      // falha ao baixar (rede instável, etc.) — botão só volta ao normal
+    } finally {
+      setBaixando(false);
+    }
+  }
+
   return (
     <div className="space-y-5 border-t border-[var(--border)] pt-6">
       <div className="mx-auto max-w-md space-y-2 text-left">
@@ -573,21 +648,60 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
           <p className="text-base font-semibold text-[var(--text-primary)]">Prévia pronta</p>
         </div>
         <p className="text-base text-[var(--text-secondary)]">
-          Esse arquivo é uma imagem, não um PDF editável, mas mesmo assim conseguimos traduzir. Veja como ficou:
+          Esse arquivo é uma imagem, não um PDF editável, mas mesmo assim conseguimos traduzir. Clique numa página
+          pra ampliar e comparar com a original:
         </p>
       </div>
 
       {imagensUrls.length > 0 && (
         <div className="mx-auto grid max-w-md grid-cols-2 gap-3 sm:max-w-lg sm:grid-cols-3">
           {imagensUrls.map((url, i) => (
-            <img
+            <button
               key={url}
-              src={url}
-              alt={`Prévia traduzida — página ${i + 1}`}
-              className="w-full rounded-xl border-2 border-[var(--accent-success)]/40 shadow-[0_0_12px_rgba(34,197,94,0.15)]"
-            />
+              type="button"
+              onClick={() => setPaginaLightbox(i)}
+              className="group relative text-left"
+              aria-label={`Ampliar comparação da página ${i + 1}`}
+            >
+              <img
+                src={url}
+                alt={`Prévia traduzida — página ${i + 1}`}
+                className="w-full rounded-xl border-2 border-[var(--accent-success)]/40 shadow-[0_0_12px_rgba(34,197,94,0.15)] transition group-hover:opacity-80"
+              />
+              <ZoomIn className="pointer-events-none absolute right-2 top-2 h-5 w-5 rounded-md bg-black/60 p-0.5 text-white opacity-80 transition group-hover:opacity-100" />
+              {paginasGratis.includes(i) && (
+                <span className="absolute bottom-2 left-2 right-2 rounded-md bg-[var(--accent-info)] px-1.5 py-0.5 text-center text-[11px] font-semibold text-white shadow">
+                  Não cobrada
+                </span>
+              )}
+            </button>
           ))}
         </div>
+      )}
+
+      {imagensUrls.length > 0 && (
+        <div className="flex flex-col items-center gap-1">
+          <button
+            type="button"
+            onClick={baixarPreviaComMarcaDagua}
+            disabled={baixando}
+            className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)] disabled:opacity-50"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {baixando ? "Preparando..." : imagensUrls.length > 1 ? "Baixar prévia (.zip)" : "Baixar prévia"}
+          </button>
+          <p className="text-center text-[11px] text-[var(--text-muted)]">
+            Com marca d&apos;água — o documento pago sai limpo, sem marca nenhuma.
+          </p>
+        </div>
+      )}
+
+      {paginaLightbox !== null && imagensOriginaisUrls[paginaLightbox] && imagensUrls[paginaLightbox] && (
+        <Lightbox
+          imagemOriginal={imagensOriginaisUrls[paginaLightbox]}
+          imagemTraduzida={imagensUrls[paginaLightbox]}
+          onClose={() => setPaginaLightbox(null)}
+        />
       )}
 
       {precoCentavos != null && (
