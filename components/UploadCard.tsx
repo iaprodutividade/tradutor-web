@@ -567,7 +567,7 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
           <p className="text-base text-[var(--text-secondary)]">
             É uma imagem (foto ou digitalização) de {paginasTotal} página(s). Nenhuma ferramenta do mercado detecta
             isso automaticamente, hoje em dia, e a maioria simplesmente devolve o documento intocado. Nossa
-            ferramenta consegue processar. É mais lento e mais caro que o normal, mas já está rodando de verdade.
+            ferramenta consegue processar. É mais lento que o normal, mas já estamos fazendo a sua tradução.
           </p>
         </div>
 
@@ -585,7 +585,7 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
                 />
               </div>
               <p className="text-base font-medium text-[var(--text-primary)]">
-                Processando {progresso.feitas} de {progresso.total} páginas da prévia grátis ({percentual}%)
+                Processando sua prévia grátis... ({percentual}%)
               </p>
             </div>
           ) : (
