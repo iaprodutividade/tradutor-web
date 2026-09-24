@@ -422,31 +422,15 @@ function ResultadoPreview({
   );
 }
 
-type EstadoAviso =
-  | "escolhendo"
-  | "form_tem_original"
-  | "calculando_orcamento"
-  | "orcamento_pronto"
-  | "enviado";
+type EstadoAviso = "processando" | "pronto" | "erro";
 
-// Mensagens mostradas enquanto "a IA calcula o orçamento" pro caminho de
-// quem não tem o arquivo original — puro efeito de percepção de esforço, já
-// que o preço em si é matemática (páginas × valor); nenhum processamento
-// real acontece nessa espera.
-const MENSAGENS_CALCULANDO = [
-  "Analisando a complexidade do documento...",
-  "Estimando o esforço de reconstrução visual...",
-  "Fechando o orçamento do processamento especial...",
+// Mensagens rotativas enquanto o processamento real (OCR + inpaint +
+// tradução) roda no backend — sem timer fixo, a duração é a do polling.
+const MENSAGENS_PROCESSANDO = [
+  "Lendo o texto nas imagens do documento...",
+  "Removendo o texto original com IA...",
+  "Traduzindo e remontando o layout...",
 ];
-
-// Preço especial pra PDF-imagem: mais caro que o preço normal por página
-// porque o processamento (quando existir) é bem mais trabalhoso. Mínimo
-// igual ao fluxo normal (PRECO_MINIMO_CENTAVOS, definido lá em cima).
-const PRECO_ESPECIAL_POR_PAGINA_CENTAVOS = 1000; // R$10/página
-
-function calcularPrecoEspecial(paginas: number) {
-  return Math.max(PRECO_MINIMO_CENTAVOS, paginas * PRECO_ESPECIAL_POR_PAGINA_CENTAVOS);
-}
 
 // Ícone "IA pensando" reutilizado nas duas esperas do fluxo (a inicial, de
 // prévia, e a de calcular o orçamento) — pedido do Robson pra ficar mais
@@ -472,44 +456,72 @@ function IconeIaProcessando({ className = "h-6 w-6" }: { className?: string }) {
 // processamento especial pra esse tipo de arquivo ainda não foi construído,
 // então o botão final só captura o interesse (caixa de sugestão existente),
 // mas já com o preço concreto na conversa.
-function AvisoPdfImagem({ paginasTotal, nomeArquivo }: { paginasTotal: number; nomeArquivo: string }) {
-  const [estado, setEstado] = useState<EstadoAviso>("escolhendo");
+function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: number }) {
+  const [estado, setEstado] = useState<EstadoAviso>("processando");
   const [mensagemIndice, setMensagemIndice] = useState(0);
+  const [precoCentavos, setPrecoCentavos] = useState<number | null>(null);
+  const [imagensUrls, setImagensUrls] = useState<string[]>([]);
+  const [erroMensagem, setErroMensagem] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [detalhe, setDetalhe] = useState("");
   const [enviando, setEnviando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
+  const [enviado, setEnviado] = useState(false);
+  const [erroEnvio, setErroEnvio] = useState<string | null>(null);
 
+  // Dispara o processamento real (OCR + inpaint + tradução) assim que o
+  // aviso aparece — uma única vez por job, mesmo que o componente re-renderize.
+  const disparadoRef = useRef(false);
   useEffect(() => {
-    if (estado !== "calculando_orcamento") return;
+    if (disparadoRef.current) return;
+    disparadoRef.current = true;
+    fetch("/api/gerar-previa-imagem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: jobId }),
+    }).catch(() => {
+      // sem problema — se nada mudar, o polling abaixo eventualmente cai em "erro"
+    });
+  }, [jobId]);
 
-    setMensagemIndice(0);
-    // Duração proporcional ao tamanho do documento (mais páginas, mais
-    // "trabalho" pra analisar), entre 15 e 20s como combinado.
-    const duracaoMs = Math.min(20000, 15000 + paginasTotal * 200);
-    const passoMs = duracaoMs / MENSAGENS_CALCULANDO.length;
-
+  // Rotaciona a mensagem de espera enquanto processa — dura o tempo real
+  // do polling, sem timer fixo.
+  useEffect(() => {
+    if (estado !== "processando") return;
     const intervalo = setInterval(() => {
-      setMensagemIndice((i) => Math.min(i + 1, MENSAGENS_CALCULANDO.length - 1));
-    }, passoMs);
-    const fim = setTimeout(() => setEstado("orcamento_pronto"), duracaoMs);
+      setMensagemIndice((i) => (i + 1) % MENSAGENS_PROCESSANDO.length);
+    }, 4000);
+    return () => clearInterval(intervalo);
+  }, [estado]);
 
-    return () => {
-      clearInterval(intervalo);
-      clearTimeout(fim);
-    };
-  }, [estado, paginasTotal]);
+  // Polling do job até a prévia da imagem ficar pronta ou dar erro.
+  useEffect(() => {
+    if (estado !== "processando") return;
+    const intervalo = setInterval(async () => {
+      try {
+        const resp = await fetch(`/api/jobs/${jobId}`);
+        const data = await resp.json();
+        if (data.status === "previa_imagem_pronta") {
+          setPrecoCentavos(data.preco_centavos ?? null);
+          setImagensUrls(Array.isArray(data.previa_imagem_urls) ? data.previa_imagem_urls : []);
+          setEstado("pronto");
+        } else if (data.status === "erro") {
+          setErroMensagem(data.erro_mensagem ?? "Deu erro ao processar o documento. Fala com a gente.");
+          setEstado("erro");
+        }
+      } catch {
+        // rede instável — tenta de novo no próximo tick
+      }
+    }, 3000);
+    return () => clearInterval(intervalo);
+  }, [estado, jobId]);
 
-  async function enviar(tipoPedido: "tem_original" | "quer_orcamento") {
+  async function enviarInteresse() {
     setEnviando(true);
-    setErro(null);
+    setErroEnvio(null);
     try {
-      const prefixo =
-        tipoPedido === "tem_original"
-          ? "[PDF-imagem: tem o original]"
-          : `[PDF-imagem: quer orçamento — ${formatarPreco(calcularPrecoEspecial(paginasTotal))}]`;
       const mensagem = [
-        `${prefixo} Arquivo: "${nomeArquivo}" (${paginasTotal} página(s)).`,
+        `[PDF-imagem: aprovou a prévia — ${precoCentavos != null ? formatarPreco(precoCentavos) : "preço a confirmar"}]`,
+        `Job: ${jobId} (${paginasTotal} página(s)).`,
         detalhe ? `Detalhe: ${detalhe}` : null,
       ]
         .filter(Boolean)
@@ -522,19 +534,51 @@ function AvisoPdfImagem({ paginasTotal, nomeArquivo }: { paginasTotal: number; n
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.erro ?? "Não deu pra enviar. Tenta de novo.");
-      setEstado("enviado");
+      setEnviado(true);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : String(e));
+      setErroEnvio(e instanceof Error ? e.message : String(e));
     } finally {
       setEnviando(false);
     }
   }
 
-  if (estado === "enviado") {
+  if (estado === "processando") {
+    return (
+      <div className="space-y-5 border-t border-[var(--border)] pt-6">
+        <div className="mx-auto max-w-md space-y-2 text-left">
+          <div className="flex items-center gap-2">
+            <ImageOff className="h-5 w-5 shrink-0 text-[var(--accent-info)]" />
+            <p className="text-sm font-semibold text-[var(--text-primary)]">Esse arquivo não é um PDF editável</p>
+          </div>
+          <p className="text-sm text-[var(--text-secondary)]">
+            É uma imagem (foto ou digitalização) de {paginasTotal} página(s). Nenhuma ferramenta do mercado detecta
+            isso automaticamente hoje. A maioria simplesmente devolve o documento intocado, sem avisar. A nossa
+            consegue processar — é mais lento e mais caro que o normal, mas já está rodando de verdade.
+          </p>
+        </div>
+        <div className="mx-auto max-w-md space-y-4 pt-2 text-center">
+          <IconeIaProcessando className="h-10 w-10" />
+          <p className="text-sm text-[var(--text-secondary)]">{MENSAGENS_PROCESSANDO[mensagemIndice]}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (estado === "erro") {
+    return (
+      <div className="space-y-4 border-t border-[var(--border)] pt-6 text-center">
+        <p className="text-sm font-medium text-[var(--accent-danger)]">{erroMensagem}</p>
+      </div>
+    );
+  }
+
+  if (enviado) {
     return (
       <div className="space-y-4 border-t border-[var(--border)] pt-6 text-center">
         <Check className="mx-auto h-8 w-8 text-[var(--accent-success)]" />
-        <p className="text-sm font-medium text-[var(--text-primary)]">Recebemos! Vamos te chamar por esse e-mail em breve.</p>
+        <p className="text-sm font-medium text-[var(--text-primary)]">
+          Recebemos! Vamos te chamar por esse e-mail assim que puder seguir com o pagamento.
+        </p>
       </div>
     );
   }
@@ -544,88 +588,59 @@ function AvisoPdfImagem({ paginasTotal, nomeArquivo }: { paginasTotal: number; n
       <div className="mx-auto max-w-md space-y-2 text-left">
         <div className="flex items-center gap-2">
           <ImageOff className="h-5 w-5 shrink-0 text-[var(--accent-info)]" />
-          <p className="text-sm font-semibold text-[var(--text-primary)]">Esse arquivo não é um PDF editável</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)]">Prévia pronta</p>
         </div>
         <p className="text-sm text-[var(--text-secondary)]">
-          É uma imagem (foto ou digitalização) de {paginasTotal} página(s). Nenhuma ferramenta do mercado detecta
-          isso automaticamente hoje. A maioria simplesmente devolve o documento intocado, sem avisar. A nossa
-          consegue processar, mas é um processo mais lento e mais caro que o normal.
+          Esse arquivo é uma imagem, não um PDF editável — mesmo assim conseguimos traduzir. Veja como ficou:
         </p>
       </div>
 
-      {estado === "escolhendo" && (
-        <div className="mx-auto max-w-md space-y-3 text-left">
-          <p className="text-sm text-[var(--text-secondary)]">
-            Antes de qualquer coisa: você tem o arquivo ou link editável original desse documento (Canva, PowerPoint,
-            InDesign, Photoshop etc.)?
-          </p>
-          <div className="flex flex-col justify-center gap-2 sm:flex-row">
-            <button onClick={() => setEstado("form_tem_original")} className="group">
-              <AcaoPill cor="esmeralda" label="Sim, eu tenho" className="w-full justify-center sm:w-auto" />
-            </button>
-            <button onClick={() => setEstado("calculando_orcamento")} className="group">
-              <AcaoPill cor="azul" label="Não tenho, quero o orçamento" className="w-full justify-center sm:w-auto" />
-            </button>
-          </div>
+      {imagensUrls.length > 0 && (
+        <div className="mx-auto grid max-w-md grid-cols-2 gap-3 sm:max-w-lg sm:grid-cols-3">
+          {imagensUrls.map((url, i) => (
+            <img
+              key={url}
+              src={url}
+              alt={`Prévia traduzida — página ${i + 1}`}
+              className="w-full rounded-xl border border-[var(--border)]"
+            />
+          ))}
         </div>
       )}
 
-      {estado === "form_tem_original" && (
-        <div className="mx-auto max-w-md space-y-3 text-left">
-          <p className="text-sm text-[var(--text-secondary)]">
-            Ótimo. Com o arquivo original a tradução costuma ser bem mais rápida e barata. Deixa seu e-mail e, se
-            quiser, o link do design, que a gente entra em contato.
+      {precoCentavos != null && (
+        <div className="flex flex-col items-center gap-2 text-center">
+          <p className="text-xs font-medium text-[var(--text-muted)]">Preço pra esse documento</p>
+          <p className="inline-block rounded-2xl bg-gradient-to-b from-sky-500 to-blue-600 px-6 py-2 text-2xl font-extrabold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.4),0_0_16px_3px_rgba(56,189,248,0.5),inset_0_1px_0_rgba(255,255,255,0.5),inset_0_-3px_5px_rgba(0,0,0,0.35),0_4px_10px_rgba(0,0,0,0.4)]">
+            {formatarPreco(precoCentavos)}
           </p>
-          <CampoEmailDetalhe
-            email={email}
-            setEmail={setEmail}
-            detalhe={detalhe}
-            setDetalhe={setDetalhe}
-            placeholderDetalhe="Link do Canva/design (opcional)"
-          />
-          {erro && <p className="text-sm text-[var(--accent-danger)]">{erro}</p>}
-          <div className="flex justify-center pt-1">
-            <button onClick={() => enviar("tem_original")} disabled={enviando || !email} className="group w-full sm:w-auto">
-              <AcaoPill cor="esmeralda" label={enviando ? "Enviando..." : "Enviar"} icon={<Send />} className="w-full justify-center sm:w-auto" />
-            </button>
-          </div>
         </div>
       )}
 
-      {estado === "calculando_orcamento" && (
-        <div className="mx-auto max-w-md space-y-4 pt-2 text-center">
-          <IconeIaProcessando className="h-10 w-10" />
-          <p className="text-sm text-[var(--text-secondary)]">{MENSAGENS_CALCULANDO[mensagemIndice]}</p>
+      <div className="mx-auto max-w-md space-y-3 text-left">
+        <p className="text-sm text-[var(--text-secondary)]">
+          O pagamento pra esse tipo de arquivo ainda está em construção. Deixa seu e-mail que a gente te chama assim
+          que puder seguir com o pagamento.
+        </p>
+        <CampoEmailDetalhe
+          email={email}
+          setEmail={setEmail}
+          detalhe={detalhe}
+          setDetalhe={setDetalhe}
+          placeholderDetalhe="Algo mais que queira contar (opcional)"
+        />
+        {erroEnvio && <p className="text-sm text-[var(--accent-danger)]">{erroEnvio}</p>}
+        <div className="flex justify-center pt-1">
+          <button onClick={enviarInteresse} disabled={enviando || !email} className="group w-full sm:w-auto">
+            <AcaoPill
+              cor="azul"
+              label={enviando ? "Enviando..." : "Avisem quando puder pagar"}
+              icon={<Send />}
+              className="w-full justify-center sm:w-auto"
+            />
+          </button>
         </div>
-      )}
-
-      {estado === "orcamento_pronto" && (
-        <div className="mx-auto max-w-md space-y-3 text-left">
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] py-4 text-center">
-            <p className="text-xs font-medium text-[var(--text-muted)]">Orçamento pra esse documento</p>
-            <p className="inline-block rounded-2xl bg-gradient-to-b from-sky-500 to-blue-600 px-6 py-2 text-2xl font-extrabold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.4),0_0_16px_3px_rgba(56,189,248,0.5),inset_0_1px_0_rgba(255,255,255,0.5),inset_0_-3px_5px_rgba(0,0,0,0.35),0_4px_10px_rgba(0,0,0,0.4)]">
-              {formatarPreco(calcularPrecoEspecial(paginasTotal))}
-            </p>
-          </div>
-          <p className="text-sm text-[var(--text-secondary)]">
-            Deixa seu e-mail pra garantir esse preço. O processamento especial pra esse tipo de arquivo ainda está em
-            construção, então a gente te chama assim que puder seguir com o pagamento.
-          </p>
-          <CampoEmailDetalhe
-            email={email}
-            setEmail={setEmail}
-            detalhe={detalhe}
-            setDetalhe={setDetalhe}
-            placeholderDetalhe="Algo mais que queira contar (opcional)"
-          />
-          {erro && <p className="text-sm text-[var(--accent-danger)]">{erro}</p>}
-          <div className="flex justify-center pt-1">
-            <button onClick={() => enviar("quer_orcamento")} disabled={enviando || !email} className="group w-full sm:w-auto">
-              <AcaoPill cor="azul" label={enviando ? "Enviando..." : "Quero garantir esse preço"} icon={<Send />} className="w-full justify-center sm:w-auto" />
-            </button>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
