@@ -1007,7 +1007,7 @@ function RecuperarJob({ jobId, onComecarDeNovo }: { jobId: string; onComecarDeNo
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
-    let intervalo: ReturnType<typeof setInterval>;
+    const intervalo: ReturnType<typeof setInterval> = setInterval(checar, 4000);
 
     async function checar() {
       try {
@@ -1045,7 +1045,6 @@ function RecuperarJob({ jobId, onComecarDeNovo }: { jobId: string; onComecarDeNo
     }
 
     checar();
-    intervalo = setInterval(checar, 4000);
     return () => clearInterval(intervalo);
   }, [jobId]);
 
