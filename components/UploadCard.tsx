@@ -21,7 +21,6 @@ import {
   Check,
   Link2,
   Mail,
-  Send,
   ImageOff,
   BrainCircuit,
 } from "lucide-react";
@@ -451,22 +450,16 @@ function IconeIaProcessando({ className = "h-6 w-6" }: { className?: string }) {
 // imagem/foto achatada, não um documento real) — caso descoberto com um
 // catálogo real que nenhuma ferramenta do mercado conseguiu traduzir. Em vez
 // de fingir uma prévia (que sairia idêntica ao original, sem traduzir nada),
-// explica a limitação na hora e, se a pessoa quiser orçamento, "calcula" e
-// mostra um preço fechado. Ainda não cobra nada de verdade — o
-// processamento especial pra esse tipo de arquivo ainda não foi construído,
-// então o botão final só captura o interesse (caixa de sugestão existente),
-// mas já com o preço concreto na conversa.
+// processa de verdade as primeiras páginas e cobra pelo pipeline completo
+// (OCR + inpaint + reescrita) do mesmo jeito que o fluxo de texto — mesmo
+// Checkout (Pix/cartão), sem aviso de "isso é diferente/mais caro/em
+// construção": o preço em si já reflete o processamento mais pesado.
 function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: number }) {
   const [estado, setEstado] = useState<EstadoAviso>("processando");
   const [mensagemIndice, setMensagemIndice] = useState(0);
   const [precoCentavos, setPrecoCentavos] = useState<number | null>(null);
   const [imagensUrls, setImagensUrls] = useState<string[]>([]);
   const [erroMensagem, setErroMensagem] = useState<string | null>(null);
-  const [email, setEmail] = useState("");
-  const [detalhe, setDetalhe] = useState("");
-  const [enviando, setEnviando] = useState(false);
-  const [enviado, setEnviado] = useState(false);
-  const [erroEnvio, setErroEnvio] = useState<string | null>(null);
 
   // Dispara o processamento real (OCR + inpaint + tradução) assim que o
   // aviso aparece — uma única vez por job, mesmo que o componente re-renderize.
@@ -515,33 +508,6 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
     return () => clearInterval(intervalo);
   }, [estado, jobId]);
 
-  async function enviarInteresse() {
-    setEnviando(true);
-    setErroEnvio(null);
-    try {
-      const mensagem = [
-        `[PDF-imagem: aprovou a prévia — ${precoCentavos != null ? formatarPreco(precoCentavos) : "preço a confirmar"}]`,
-        `Job: ${jobId} (${paginasTotal} página(s)).`,
-        detalhe ? `Detalhe: ${detalhe}` : null,
-      ]
-        .filter(Boolean)
-        .join(" ");
-
-      const resp = await fetch("/api/sugestoes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, mensagem }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.erro ?? "Não deu pra enviar. Tenta de novo.");
-      setEnviado(true);
-    } catch (e) {
-      setErroEnvio(e instanceof Error ? e.message : String(e));
-    } finally {
-      setEnviando(false);
-    }
-  }
-
   if (estado === "processando") {
     return (
       <div className="space-y-5 border-t border-[var(--border)] pt-6">
@@ -572,17 +538,6 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
     );
   }
 
-  if (enviado) {
-    return (
-      <div className="space-y-4 border-t border-[var(--border)] pt-6 text-center">
-        <Check className="mx-auto h-8 w-8 text-[var(--accent-success)]" />
-        <p className="text-sm font-medium text-[var(--text-primary)]">
-          Recebemos! Vamos te chamar por esse e-mail assim que puder seguir com o pagamento.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-5 border-t border-[var(--border)] pt-6">
       <div className="mx-auto max-w-md space-y-2 text-left">
@@ -609,72 +564,23 @@ function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: 
       )}
 
       {precoCentavos != null && (
-        <div className="flex flex-col items-center gap-2 text-center">
-          <p className="text-xs font-medium text-[var(--text-muted)]">Preço pra esse documento</p>
-          <p className="inline-block rounded-2xl bg-gradient-to-b from-sky-500 to-blue-600 px-6 py-2 text-2xl font-extrabold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.4),0_0_16px_3px_rgba(56,189,248,0.5),inset_0_1px_0_rgba(255,255,255,0.5),inset_0_-3px_5px_rgba(0,0,0,0.35),0_4px_10px_rgba(0,0,0,0.4)]">
-            {formatarPreco(precoCentavos)}
-          </p>
+        <div className="space-y-5 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-5">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <p className="text-sm text-[var(--text-secondary)]">
+              Documento completo: <strong className="text-[var(--text-primary)]">{paginasTotal} página(s)</strong>
+            </p>
+            <p className="inline-block rounded-2xl bg-gradient-to-b from-sky-500 to-blue-600 px-6 py-2 text-3xl font-extrabold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.4),0_0_16px_3px_rgba(56,189,248,0.5),inset_0_1px_0_rgba(255,255,255,0.5),inset_0_-3px_5px_rgba(0,0,0,0.35),0_4px_10px_rgba(0,0,0,0.4)]">
+              {formatarPreco(precoCentavos)}
+            </p>
+          </div>
+
+          <Checkout
+            jobId={jobId}
+            valorCentavos={precoCentavos}
+            onPrecoAtualizado={(novoPreco) => setPrecoCentavos(novoPreco)}
+          />
         </div>
       )}
-
-      <div className="mx-auto max-w-md space-y-3 text-left">
-        <p className="text-sm text-[var(--text-secondary)]">
-          O pagamento pra esse tipo de arquivo ainda está em construção. Deixa seu e-mail que a gente te chama assim
-          que puder seguir com o pagamento.
-        </p>
-        <CampoEmailDetalhe
-          email={email}
-          setEmail={setEmail}
-          detalhe={detalhe}
-          setDetalhe={setDetalhe}
-          placeholderDetalhe="Algo mais que queira contar (opcional)"
-        />
-        {erroEnvio && <p className="text-sm text-[var(--accent-danger)]">{erroEnvio}</p>}
-        <div className="flex justify-center pt-1">
-          <button onClick={enviarInteresse} disabled={enviando || !email} className="group w-full sm:w-auto">
-            <AcaoPill
-              cor="azul"
-              label={enviando ? "Enviando..." : "Avisem quando puder pagar"}
-              icon={<Send />}
-              className="w-full justify-center sm:w-auto"
-            />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CampoEmailDetalhe({
-  email,
-  setEmail,
-  detalhe,
-  setDetalhe,
-  placeholderDetalhe,
-}: {
-  email: string;
-  setEmail: (v: string) => void;
-  detalhe: string;
-  setDetalhe: (v: string) => void;
-  placeholderDetalhe: string;
-}) {
-  return (
-    <div className="space-y-2">
-      <input
-        type="email"
-        required
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="Seu e-mail"
-        className="w-full rounded-xl border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:border-sky-500/60"
-      />
-      <input
-        type="text"
-        value={detalhe}
-        onChange={(e) => setDetalhe(e.target.value)}
-        placeholder={placeholderDetalhe}
-        className="w-full rounded-xl border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:border-sky-500/60"
-      />
     </div>
   );
 }
