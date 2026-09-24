@@ -23,6 +23,7 @@ import {
   Mail,
   Send,
   ImageOff,
+  BrainCircuit,
 } from "lucide-react";
 import { Card } from "@/components/ui";
 import { AcaoPill } from "@/components/AcaoTile";
@@ -55,6 +56,7 @@ type ResultadoDocx = {
 
 type ResultadoPdfSemTexto = {
   tipo: "pdf_sem_texto";
+  job_id: string;
   paginas_total: number;
   imagem_original_base64: string;
 };
@@ -284,7 +286,7 @@ export function UploadCard() {
 
       {estado === "processando" && (
         <p className="flex items-center justify-center gap-2 text-sm text-[var(--text-secondary)]">
-          <Loader2 className="h-4 w-4 animate-spin" /> Traduzindo a 1ª página...
+          <IconeIaProcessando className="h-4 w-4" /> Traduzindo a 1ª página...
         </p>
       )}
 
@@ -326,7 +328,7 @@ function ResultadoPreview({
   const [lightbox, setLightbox] = useState(false);
 
   if (resultado.tipo === "pdf_sem_texto") {
-    return <AvisoPdfImagem paginasTotal={resultado.paginas_total} nomeArquivo={nomeArquivo} />;
+    return <AvisoPdfImagem jobId={resultado.job_id} paginasTotal={resultado.paginas_total} />;
   }
 
   function baixarPdfExemplo() {
@@ -420,27 +422,58 @@ function ResultadoPreview({
   );
 }
 
-type EstadoAviso = "calculando" | "escolhendo" | "form_tem_original" | "form_interesse" | "enviado";
+type EstadoAviso =
+  | "escolhendo"
+  | "form_tem_original"
+  | "calculando_orcamento"
+  | "orcamento_pronto"
+  | "enviado";
 
-// Mensagens mostradas enquanto "calcula o orçamento" — a análise (detectar
-// que o PDF não tem texto extraível) já rodou de verdade no backend antes
-// disso; essa etapa só torna visível pro visitante que teve trabalho
-// analisando o arquivo, em vez de aparecer tudo instantâneo.
+// Mensagens mostradas enquanto "a IA calcula o orçamento" pro caminho de
+// quem não tem o arquivo original — puro efeito de percepção de esforço, já
+// que o preço em si é matemática (páginas × valor); nenhum processamento
+// real acontece nessa espera.
 const MENSAGENS_CALCULANDO = [
-  "Analisando as páginas do documento...",
-  "Verificando o que dá pra recuperar do arquivo...",
-  "Calculando o orçamento do processamento especial...",
+  "Analisando a complexidade do documento...",
+  "Estimando o esforço de reconstrução visual...",
+  "Fechando o orçamento do processamento especial...",
 ];
+
+// Preço especial pra PDF-imagem: mais caro que o preço normal por página
+// porque o processamento (quando existir) é bem mais trabalhoso. Mínimo
+// igual ao fluxo normal (PRECO_MINIMO_CENTAVOS, definido lá em cima).
+const PRECO_ESPECIAL_POR_PAGINA_CENTAVOS = 1000; // R$10/página
+
+function calcularPrecoEspecial(paginas: number) {
+  return Math.max(PRECO_MINIMO_CENTAVOS, paginas * PRECO_ESPECIAL_POR_PAGINA_CENTAVOS);
+}
+
+// Ícone "IA pensando" reutilizado nas duas esperas do fluxo (a inicial, de
+// prévia, e a de calcular o orçamento) — pedido do Robson pra ficar mais
+// temático que um spinner genérico.
+function IconeIaProcessando({ className = "h-6 w-6" }: { className?: string }) {
+  // <span>, não <div> — esse ícone é usado tanto solto (fora de <p>) quanto
+  // inline dentro de um <p> (spinner inicial da prévia); <div> dentro de
+  // <p> é HTML inválido e quebra a hidratação do React.
+  return (
+    <span className={`relative mx-auto inline-block ${className}`}>
+      <span className="absolute inset-0 animate-ping rounded-full bg-[var(--accent-info)]/30" />
+      <BrainCircuit className="relative h-full w-full animate-pulse text-[var(--accent-info)]" />
+    </span>
+  );
+}
 
 // Mostrado quando o backend detecta que o PDF não tem texto extraível (é
 // imagem/foto achatada, não um documento real) — caso descoberto com um
 // catálogo real que nenhuma ferramenta do mercado conseguiu traduzir. Em vez
 // de fingir uma prévia (que sairia idêntica ao original, sem traduzir nada),
-// explica a limitação e captura o interesse via a caixa de sugestão que já
-// existe, sem cobrar nada ainda — o processamento especial pra esse tipo de
-// arquivo ainda não foi construído.
+// explica a limitação na hora e, se a pessoa quiser orçamento, "calcula" e
+// mostra um preço fechado. Ainda não cobra nada de verdade — o
+// processamento especial pra esse tipo de arquivo ainda não foi construído,
+// então o botão final só captura o interesse (caixa de sugestão existente),
+// mas já com o preço concreto na conversa.
 function AvisoPdfImagem({ paginasTotal, nomeArquivo }: { paginasTotal: number; nomeArquivo: string }) {
-  const [estado, setEstado] = useState<EstadoAviso>("calculando");
+  const [estado, setEstado] = useState<EstadoAviso>("escolhendo");
   const [mensagemIndice, setMensagemIndice] = useState(0);
   const [email, setEmail] = useState("");
   const [detalhe, setDetalhe] = useState("");
@@ -448,6 +481,9 @@ function AvisoPdfImagem({ paginasTotal, nomeArquivo }: { paginasTotal: number; n
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
+    if (estado !== "calculando_orcamento") return;
+
+    setMensagemIndice(0);
     // Duração proporcional ao tamanho do documento (mais páginas, mais
     // "trabalho" pra analisar), entre 15 e 20s como combinado.
     const duracaoMs = Math.min(20000, 15000 + paginasTotal * 200);
@@ -456,29 +492,22 @@ function AvisoPdfImagem({ paginasTotal, nomeArquivo }: { paginasTotal: number; n
     const intervalo = setInterval(() => {
       setMensagemIndice((i) => Math.min(i + 1, MENSAGENS_CALCULANDO.length - 1));
     }, passoMs);
-    const fim = setTimeout(() => setEstado("escolhendo"), duracaoMs);
+    const fim = setTimeout(() => setEstado("orcamento_pronto"), duracaoMs);
 
     return () => {
       clearInterval(intervalo);
       clearTimeout(fim);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  if (estado === "calculando") {
-    return (
-      <div className="space-y-4 border-t border-[var(--border)] pt-6 text-center">
-        <Loader2 className="mx-auto h-6 w-6 animate-spin text-[var(--accent-info)]" />
-        <p className="text-sm text-[var(--text-secondary)]">{MENSAGENS_CALCULANDO[mensagemIndice]}</p>
-      </div>
-    );
-  }
+  }, [estado, paginasTotal]);
 
   async function enviar(tipoPedido: "tem_original" | "quer_orcamento") {
     setEnviando(true);
     setErro(null);
     try {
-      const prefixo = tipoPedido === "tem_original" ? "[PDF-imagem: tem o original]" : "[PDF-imagem: quer orçamento]";
+      const prefixo =
+        tipoPedido === "tem_original"
+          ? "[PDF-imagem: tem o original]"
+          : `[PDF-imagem: quer orçamento — ${formatarPreco(calcularPrecoEspecial(paginasTotal))}]`;
       const mensagem = [
         `${prefixo} Arquivo: "${nomeArquivo}" (${paginasTotal} página(s)).`,
         detalhe ? `Detalhe: ${detalhe}` : null,
@@ -534,7 +563,7 @@ function AvisoPdfImagem({ paginasTotal, nomeArquivo }: { paginasTotal: number; n
             <button onClick={() => setEstado("form_tem_original")} className="group">
               <AcaoPill cor="esmeralda" label="Sim, eu tenho" className="w-full justify-center sm:w-auto" />
             </button>
-            <button onClick={() => setEstado("form_interesse")} className="group">
+            <button onClick={() => setEstado("calculando_orcamento")} className="group">
               <AcaoPill cor="azul" label="Não tenho, quero o orçamento" className="w-full justify-center sm:w-auto" />
             </button>
           </div>
@@ -563,11 +592,24 @@ function AvisoPdfImagem({ paginasTotal, nomeArquivo }: { paginasTotal: number; n
         </div>
       )}
 
-      {estado === "form_interesse" && (
+      {estado === "calculando_orcamento" && (
+        <div className="mx-auto max-w-md space-y-4 pt-2 text-center">
+          <IconeIaProcessando className="h-10 w-10" />
+          <p className="text-sm text-[var(--text-secondary)]">{MENSAGENS_CALCULANDO[mensagemIndice]}</p>
+        </div>
+      )}
+
+      {estado === "orcamento_pronto" && (
         <div className="mx-auto max-w-md space-y-3 text-left">
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] py-4 text-center">
+            <p className="text-xs font-medium text-[var(--text-muted)]">Orçamento pra esse documento</p>
+            <p className="inline-block rounded-2xl bg-gradient-to-b from-sky-500 to-blue-600 px-6 py-2 text-2xl font-extrabold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.4),0_0_16px_3px_rgba(56,189,248,0.5),inset_0_1px_0_rgba(255,255,255,0.5),inset_0_-3px_5px_rgba(0,0,0,0.35),0_4px_10px_rgba(0,0,0,0.4)]">
+              {formatarPreco(calcularPrecoEspecial(paginasTotal))}
+            </p>
+          </div>
           <p className="text-sm text-[var(--text-secondary)]">
-            Sem problema. Deixa seu e-mail que a gente te chama com o orçamento assim que o processamento especial
-            pra esse tipo de arquivo estiver pronto.
+            Deixa seu e-mail pra garantir esse preço. O processamento especial pra esse tipo de arquivo ainda está em
+            construção, então a gente te chama assim que puder seguir com o pagamento.
           </p>
           <CampoEmailDetalhe
             email={email}
@@ -579,7 +621,7 @@ function AvisoPdfImagem({ paginasTotal, nomeArquivo }: { paginasTotal: number; n
           {erro && <p className="text-sm text-[var(--accent-danger)]">{erro}</p>}
           <div className="flex justify-center pt-1">
             <button onClick={() => enviar("quer_orcamento")} disabled={enviando || !email} className="group w-full sm:w-auto">
-              <AcaoPill cor="azul" label={enviando ? "Enviando..." : "Quero o orçamento"} icon={<Send />} className="w-full justify-center sm:w-auto" />
+              <AcaoPill cor="azul" label={enviando ? "Enviando..." : "Quero garantir esse preço"} icon={<Send />} className="w-full justify-center sm:w-auto" />
             </button>
           </div>
         </div>
