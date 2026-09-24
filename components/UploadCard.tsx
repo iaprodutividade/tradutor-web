@@ -21,6 +21,8 @@ import {
   Check,
   Link2,
   Mail,
+  ImageOff,
+  BrainCircuit,
 } from "lucide-react";
 import { Card } from "@/components/ui";
 import { AcaoPill } from "@/components/AcaoTile";
@@ -51,7 +53,14 @@ type ResultadoDocx = {
   imagem_traduzida_base64: string;
 };
 
-type Resultado = ResultadoPdf | ResultadoDocx;
+type ResultadoPdfSemTexto = {
+  tipo: "pdf_sem_texto";
+  job_id: string;
+  paginas_total: number;
+  imagem_original_base64: string;
+};
+
+type Resultado = ResultadoPdf | ResultadoDocx | ResultadoPdfSemTexto;
 
 function formatarPreco(centavos: number) {
   return (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -276,7 +285,7 @@ export function UploadCard() {
 
       {estado === "processando" && (
         <p className="flex items-center justify-center gap-2 text-sm text-[var(--text-secondary)]">
-          <Loader2 className="h-4 w-4 animate-spin" /> Traduzindo a 1ª página...
+          <IconeIaProcessando className="h-4 w-4" /> Traduzindo a 1ª página...
         </p>
       )}
 
@@ -298,6 +307,7 @@ export function UploadCard() {
       {estado === "revelado" && resultado && (
         <ResultadoPreview
           resultado={resultado}
+          nomeArquivo={arquivo?.name ?? ""}
           onPrecoAtualizado={(novoPreco) => setResultado((r) => (r ? { ...r, preco_centavos: novoPreco } : r))}
         />
       )}
@@ -307,12 +317,18 @@ export function UploadCard() {
 
 function ResultadoPreview({
   resultado,
+  nomeArquivo,
   onPrecoAtualizado,
 }: {
   resultado: Resultado;
+  nomeArquivo: string;
   onPrecoAtualizado: (novoPreco: number) => void;
 }) {
   const [lightbox, setLightbox] = useState(false);
+
+  if (resultado.tipo === "pdf_sem_texto") {
+    return <AvisoPdfImagem jobId={resultado.job_id} paginasTotal={resultado.paginas_total} />;
+  }
 
   function baixarPdfExemplo() {
     if (resultado.tipo !== "pdf") return;
@@ -401,6 +417,197 @@ function ResultadoPreview({
           onPrecoAtualizado={onPrecoAtualizado}
         />
       </div>
+    </div>
+  );
+}
+
+type EstadoAviso = "processando" | "pronto" | "erro";
+
+// Mensagens rotativas enquanto o processamento real (OCR + inpaint +
+// tradução) roda no backend — sem timer fixo, a duração é a do polling.
+const MENSAGENS_PROCESSANDO = [
+  "Lendo o texto nas imagens do documento...",
+  "Removendo o texto original com IA...",
+  "Traduzindo e remontando o layout...",
+];
+
+// Ícone "IA pensando" reutilizado nas duas esperas do fluxo (a inicial, de
+// prévia, e a de calcular o orçamento) — pedido do Robson pra ficar mais
+// temático que um spinner genérico.
+function IconeIaProcessando({ className = "h-6 w-6" }: { className?: string }) {
+  // <span>, não <div> — esse ícone é usado tanto solto (fora de <p>) quanto
+  // inline dentro de um <p> (spinner inicial da prévia); <div> dentro de
+  // <p> é HTML inválido e quebra a hidratação do React.
+  return (
+    <span className={`relative mx-auto inline-block ${className}`}>
+      <span className="absolute inset-0 animate-ping rounded-full bg-[var(--accent-info)]/30" />
+      <BrainCircuit className="relative h-full w-full animate-pulse text-[var(--accent-info)]" />
+    </span>
+  );
+}
+
+// Mostrado quando o backend detecta que o PDF não tem texto extraível (é
+// imagem/foto achatada, não um documento real) — caso descoberto com um
+// catálogo real que nenhuma ferramenta do mercado conseguiu traduzir. Em vez
+// de fingir uma prévia (que sairia idêntica ao original, sem traduzir nada),
+// processa de verdade as primeiras páginas e cobra pelo pipeline completo
+// (OCR + inpaint + reescrita) do mesmo jeito que o fluxo de texto — mesmo
+// Checkout (Pix/cartão), sem aviso de "isso é diferente/mais caro/em
+// construção": o preço em si já reflete o processamento mais pesado.
+function AvisoPdfImagem({ jobId, paginasTotal }: { jobId: string; paginasTotal: number }) {
+  const [estado, setEstado] = useState<EstadoAviso>("processando");
+  const [mensagemIndice, setMensagemIndice] = useState(0);
+  const [precoCentavos, setPrecoCentavos] = useState<number | null>(null);
+  const [imagensUrls, setImagensUrls] = useState<string[]>([]);
+  const [erroMensagem, setErroMensagem] = useState<string | null>(null);
+  // Progresso real (páginas processadas/total), não simulado — o backend já
+  // atualiza isso a cada página via unidades_processadas/unidades_total.
+  const [progresso, setProgresso] = useState<{ feitas: number; total: number } | null>(null);
+
+  // Dispara o processamento real (OCR + inpaint + tradução) assim que o
+  // aviso aparece — uma única vez por job, mesmo que o componente re-renderize.
+  const disparadoRef = useRef(false);
+  useEffect(() => {
+    if (disparadoRef.current) return;
+    disparadoRef.current = true;
+    fetch("/api/gerar-previa-imagem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: jobId }),
+    }).catch(() => {
+      // sem problema — se nada mudar, o polling abaixo eventualmente cai em "erro"
+    });
+  }, [jobId]);
+
+  // Rotaciona a mensagem de espera enquanto processa — dura o tempo real
+  // do polling, sem timer fixo.
+  useEffect(() => {
+    if (estado !== "processando") return;
+    const intervalo = setInterval(() => {
+      setMensagemIndice((i) => (i + 1) % MENSAGENS_PROCESSANDO.length);
+    }, 4000);
+    return () => clearInterval(intervalo);
+  }, [estado]);
+
+  // Polling do job até a prévia da imagem ficar pronta ou dar erro.
+  useEffect(() => {
+    if (estado !== "processando") return;
+    const intervalo = setInterval(async () => {
+      try {
+        const resp = await fetch(`/api/jobs/${jobId}`);
+        const data = await resp.json();
+        if (data.status === "previa_imagem_pronta") {
+          setPrecoCentavos(data.preco_centavos ?? null);
+          setImagensUrls(Array.isArray(data.previa_imagem_urls) ? data.previa_imagem_urls : []);
+          setEstado("pronto");
+        } else if (data.status === "erro") {
+          setErroMensagem(data.erro_mensagem ?? "Deu erro ao processar o documento. Fala com a gente.");
+          setEstado("erro");
+        } else if (data.unidades_total > 0) {
+          setProgresso({ feitas: data.unidades_processadas ?? 0, total: data.unidades_total });
+        }
+      } catch {
+        // rede instável — tenta de novo no próximo tick
+      }
+    }, 3000);
+    return () => clearInterval(intervalo);
+  }, [estado, jobId]);
+
+  if (estado === "processando") {
+    const percentual = progresso ? Math.round((progresso.feitas / progresso.total) * 100) : 0;
+    return (
+      <div className="space-y-5 border-t border-[var(--border)] pt-6">
+        <div className="mx-auto max-w-md space-y-2 text-left">
+          <div className="flex items-center gap-2">
+            <ImageOff className="h-5 w-5 shrink-0 text-[var(--accent-info)]" />
+            <p className="text-base font-semibold text-[var(--text-primary)]">Esse arquivo não é um PDF editável</p>
+          </div>
+          <p className="text-base text-[var(--text-secondary)]">
+            É uma imagem (foto ou digitalização) de {paginasTotal} página(s). Nenhuma ferramenta do mercado detecta
+            isso automaticamente hoje. A maioria simplesmente devolve o documento intocado, sem avisar. A nossa
+            consegue processar — é mais lento e mais caro que o normal, mas já está rodando de verdade.
+          </p>
+        </div>
+
+        <div className="mx-auto max-w-md space-y-4 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-5">
+          <p className="flex items-center gap-2 text-sm font-medium text-[var(--accent-success)]">
+            <Check className="h-4 w-4 shrink-0" /> Arquivo enviado
+          </p>
+
+          {progresso ? (
+            <div className="space-y-2">
+              <div className="h-3 w-full overflow-hidden rounded-full bg-[var(--surface-3)] ring-1 ring-[var(--border)]">
+                <div
+                  className="progresso-brilho h-full rounded-full bg-gradient-to-r from-sky-500 to-blue-600 shadow-[0_0_10px_rgba(56,189,248,0.55)] transition-[width] duration-700 ease-out"
+                  style={{ width: `${percentual}%` }}
+                />
+              </div>
+              <p className="text-base font-medium text-[var(--text-primary)]">
+                Processando página {progresso.feitas} de {progresso.total} — {percentual}%
+              </p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <IconeIaProcessando className="h-8 w-8 shrink-0" />
+              <p className="text-base text-[var(--text-secondary)]">{MENSAGENS_PROCESSANDO[mensagemIndice]}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (estado === "erro") {
+    return (
+      <div className="space-y-4 border-t border-[var(--border)] pt-6 text-center">
+        <p className="text-base font-medium text-[var(--accent-danger)]">{erroMensagem}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5 border-t border-[var(--border)] pt-6">
+      <div className="mx-auto max-w-md space-y-2 text-left">
+        <div className="flex items-center gap-2">
+          <Check className="h-5 w-5 shrink-0 text-[var(--accent-success)]" />
+          <p className="text-base font-semibold text-[var(--text-primary)]">Prévia pronta</p>
+        </div>
+        <p className="text-base text-[var(--text-secondary)]">
+          Esse arquivo é uma imagem, não um PDF editável — mesmo assim conseguimos traduzir. Veja como ficou:
+        </p>
+      </div>
+
+      {imagensUrls.length > 0 && (
+        <div className="mx-auto grid max-w-md grid-cols-2 gap-3 sm:max-w-lg sm:grid-cols-3">
+          {imagensUrls.map((url, i) => (
+            <img
+              key={url}
+              src={url}
+              alt={`Prévia traduzida — página ${i + 1}`}
+              className="w-full rounded-xl border-2 border-[var(--accent-success)]/40 shadow-[0_0_12px_rgba(34,197,94,0.15)]"
+            />
+          ))}
+        </div>
+      )}
+
+      {precoCentavos != null && (
+        <div className="space-y-5 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-5">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <p className="text-base text-[var(--text-secondary)]">
+              Documento completo: <strong className="text-[var(--text-primary)]">{paginasTotal} página(s)</strong>
+            </p>
+            <p className="inline-block rounded-2xl bg-gradient-to-b from-sky-500 to-blue-600 px-6 py-2 text-3xl font-extrabold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.4),0_0_16px_3px_rgba(56,189,248,0.5),inset_0_1px_0_rgba(255,255,255,0.5),inset_0_-3px_5px_rgba(0,0,0,0.35),0_4px_10px_rgba(0,0,0,0.4)]">
+              {formatarPreco(precoCentavos)}
+            </p>
+          </div>
+
+          <Checkout
+            jobId={jobId}
+            valorCentavos={precoCentavos}
+            onPrecoAtualizado={(novoPreco) => setPrecoCentavos(novoPreco)}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -554,7 +761,7 @@ function BarraProgressoTraducao({
         <div className="h-3 w-full overflow-hidden rounded-full bg-[var(--surface-2)] ring-1 ring-[var(--border)]">
           <div
             className={`h-full rounded-full bg-gradient-to-r from-sky-500 to-blue-600 shadow-[0_0_10px_rgba(56,189,248,0.55)] transition-[width] duration-700 ease-out ${
-              temTotal ? "" : "w-1/3 animate-pulse"
+              temTotal ? "progresso-brilho" : "w-1/3 animate-pulse"
             }`}
             style={temTotal ? { width: `${percentual}%` } : undefined}
           />
@@ -1075,9 +1282,9 @@ function Checkout({
             <button
               onClick={aplicarCupom}
               disabled={aplicandoCupom || !codigoCupom.trim()}
-              className="shrink-0 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50"
+              className="group shrink-0 disabled:opacity-40"
             >
-              {aplicandoCupom ? "..." : "Aplicar"}
+              <AcaoPill cor="esmeralda" label={aplicandoCupom ? "..." : "Aplicar"} className="!px-4 !py-2" />
             </button>
           </div>
           {erroCupom && <p className="text-xs text-[var(--accent-danger)]">{erroCupom}</p>}

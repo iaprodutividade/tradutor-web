@@ -15,6 +15,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ erro: "Job não encontrado." }, { status: 404 });
   }
 
+  let previaImagemUrls: string[] | null = null;
+  if (job.status === "previa_imagem_pronta" && Array.isArray(job.previas_imagem_paths)) {
+    const assinadas = await Promise.all(
+      (job.previas_imagem_paths as string[]).map((caminho) =>
+        supabase.storage.from(BUCKET_ARQUIVOS).createSignedUrl(caminho, 60 * 30)
+      )
+    );
+    previaImagemUrls = assinadas.map((r) => r.data?.signedUrl).filter((u): u is string => Boolean(u));
+  }
+
   let downloadUrl: string | null = null;
   if (job.status === "pronto" && job.arquivo_traduzido_path) {
     // Nome amigavel pro download (o path no Storage e so o job_id, um UUID)
@@ -40,5 +50,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     tipo_arquivo: job.tipo_arquivo,
     unidades_processadas: job.unidades_processadas,
     unidades_total: job.unidades_total,
+    preco_centavos: job.preco_centavos,
+    previa_imagem_urls: previaImagemUrls,
   });
 }

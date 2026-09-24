@@ -38,6 +38,14 @@ export async function POST(req: NextRequest) {
   const jobId = crypto.randomUUID();
   const arquivoOriginalPath = `originais/${jobId}.${extensao}`;
 
+  // PDF-imagem (sem texto extraível) também sobe pro Storage e cria job —
+  // precisa disso pra disparar o processamento assíncrono em
+  // /api/gerar-previa-imagem depois (o backend baixa o arquivo original
+  // pelo job, não recebe upload de novo). Preço só é definido quando a
+  // prévia terminar de processar (não sabemos ainda se vai custar mais
+  // ou menos até rodar de verdade).
+  const ehPdfImagem = data.tipo === "pdf_sem_texto";
+
   const { error: erroUpload } = await supabase.storage
     .from(BUCKET_ARQUIVOS)
     .upload(arquivoOriginalPath, await arquivo.arrayBuffer(), {
@@ -57,9 +65,10 @@ export async function POST(req: NextRequest) {
     idioma_destino: idiomaDestino,
     converter_unidades: formData.get("converter_unidades") === "true",
     paginas_total: data.paginas_total,
-    preco_centavos: data.preco_centavos,
+    preco_centavos: ehPdfImagem ? null : data.preco_centavos,
     arquivo_original_path: arquivoOriginalPath,
     ip_cliente: ipCliente,
+    status: ehPdfImagem ? "aguardando_previa_imagem" : undefined,
   });
   if (erroInsert) {
     return NextResponse.json({ erro: `Falha ao criar o job: ${erroInsert.message}` }, { status: 500 });

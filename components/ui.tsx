@@ -26,6 +26,7 @@ const BADGE_STYLES: Record<string, string> = {
   Processando: "bg-[var(--accent-warning-bg)] text-[var(--accent-warning)] border-[var(--accent-warning-border)]",
   Pronto: "bg-[var(--accent-success-bg)] text-[var(--accent-success)] border-[var(--accent-success-border)]",
   Erro: "bg-[var(--accent-danger-bg)] text-[var(--accent-danger)] border-[var(--accent-danger-border)]",
+  Novo: "bg-[var(--accent-info-bg)] text-[var(--accent-info)] border-[var(--accent-info-border)]",
 };
 
 export function Badge({ children }: { children: string }) {
