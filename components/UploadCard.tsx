@@ -72,6 +72,11 @@ function formatarPreco(centavos: number) {
 // quando o piso mínimo foi aplicado.
 const PRECO_MINIMO_CENTAVOS = 1490;
 
+// Imagem crua (jpg/png/webp) entra pelo mesmo fluxo de "PDF sem texto" --
+// o backend abre a imagem direto como documento de 1 página via fitz, sem
+// precisar converter nada aqui. Mesma lista do backend (app.py, /preview).
+const EXTENSOES_ACEITAS = ["pdf", "docx", "jpg", "jpeg", "png", "webp"];
+
 type EstadoPreview = "sem_arquivo" | "processando" | "pronto_pra_revelar" | "revelado" | "erro";
 
 export function UploadCard() {
@@ -126,8 +131,9 @@ export function UploadCard() {
   function escolherArquivo(f: File | null) {
     if (!f) return;
     const extensao = f.name.split(".").pop()?.toLowerCase();
-    if (extensao !== "pdf" && extensao !== "docx") {
-      setMensagem("Por enquanto só aceitamos arquivos .pdf ou .docx.");
+    if (!extensao || !EXTENSOES_ACEITAS.includes(extensao)) {
+      setMensagem("Por enquanto só aceitamos arquivos .pdf, .docx, .jpg, .jpeg, .png ou .webp.");
+      setEstado("erro");
       return;
     }
     setMensagem(null);
@@ -248,7 +254,7 @@ export function UploadCard() {
         <input
           ref={inputRef}
           type="file"
-          accept=".pdf,.docx"
+          accept=".pdf,.docx,.jpg,.jpeg,.png,.webp"
           className="hidden"
           onChange={(e) => escolherArquivo(e.target.files?.[0] ?? null)}
         />
@@ -262,7 +268,7 @@ export function UploadCard() {
           <>
             <UploadCloud className="h-8 w-8 text-[var(--text-muted)]" />
             <p className="text-sm font-medium text-[var(--text-primary)]">Arraste o arquivo aqui ou clique pra escolher</p>
-            <p className="text-xs text-[var(--text-muted)]">PDF ou DOCX</p>
+            <p className="text-xs text-[var(--text-muted)]">PDF, DOCX, JPG, PNG ou WEBP</p>
           </>
         )}
       </div>

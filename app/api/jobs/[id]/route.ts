@@ -39,12 +39,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (job.status === "pronto" && job.arquivo_traduzido_path) {
     // Nome amigavel pro download (o path no Storage e so o job_id, um UUID)
     // — nome original + "-traduzido", em vez do arquivo salvo com um UUID cru.
+    // A extensão vem do arquivo TRADUZIDO de verdade, não do original: um
+    // pdf_sem_texto pode ter vindo de uma imagem (.jpg/.png/.webp), mas o
+    // resultado processado é sempre um PDF (nunca a imagem de volta).
     const nomeOriginal: string = job.nome_arquivo || "documento";
-    const pontoExtensao = nomeOriginal.lastIndexOf(".");
-    const nomeDownload =
-      pontoExtensao > 0
-        ? `${nomeOriginal.slice(0, pontoExtensao)}-traduzido${nomeOriginal.slice(pontoExtensao)}`
-        : `${nomeOriginal}-traduzido`;
+    const pontoExtensaoOriginal = nomeOriginal.lastIndexOf(".");
+    const nomeBase = pontoExtensaoOriginal > 0 ? nomeOriginal.slice(0, pontoExtensaoOriginal) : nomeOriginal;
+    const extensaoSaida = job.arquivo_traduzido_path.slice(job.arquivo_traduzido_path.lastIndexOf("."));
+    const nomeDownload = `${nomeBase}-traduzido${extensaoSaida}`;
 
     const { data: signed } = await supabase.storage
       .from(BUCKET_ARQUIVOS)
