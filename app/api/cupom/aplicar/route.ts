@@ -1,6 +1,7 @@
 import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { estaProntoParaPagar } from "@/lib/job-status";
 
 // Aplica um cupom de desconto num job ainda nao pago. O preco final e
 // calculado e gravado no proprio job (preco_centavos) aqui no servidor —
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
   if (erroJob || !job) {
     return NextResponse.json({ erro: "Job não encontrado." }, { status: 404 });
   }
-  if (job.status !== "aguardando_pagamento") {
+  if (!estaProntoParaPagar(job.status)) {
     return NextResponse.json({ erro: `Este job já está com status "${job.status}".` }, { status: 409 });
   }
   if (job.cupom_codigo) {

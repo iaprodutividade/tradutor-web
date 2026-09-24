@@ -2,6 +2,7 @@ import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { criarPagamentoCartao } from "@/lib/mercadopago";
+import { estaProntoParaPagar } from "@/lib/job-status";
 
 // Recebe o token já gerado no navegador pelo Card Payment Brick — o número
 // do cartão nunca passa por aqui nem pelo nosso backend.
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
   if (erroJob || !job) {
     return NextResponse.json({ erro: "Job não encontrado." }, { status: 404 });
   }
-  if (job.status !== "aguardando_pagamento") {
+  if (!estaProntoParaPagar(job.status)) {
     return NextResponse.json({ erro: `Este job já está com status "${job.status}".` }, { status: 409 });
   }
 

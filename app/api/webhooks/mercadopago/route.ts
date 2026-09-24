@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { buscarPagamento } from "@/lib/mercadopago";
 import { dispararProcessamentoCompleto } from "@/lib/tradutor-processamento";
 import { enviarAlertaWhatsApp, montarMensagemVenda } from "@/lib/whatsapp-alerta";
+import { estaProntoParaPagar } from "@/lib/job-status";
 
 // Webhook do Mercado Pago — só avisa o id do pagamento (topic=payment),
 // então buscamos os detalhes de verdade na API antes de confirmar. Único
@@ -47,8 +48,11 @@ export async function POST(req: NextRequest) {
     if (pago) {
       const { data: job } = await supabase.from("jobs").select("*").eq("id", jobId).single();
       // Idempotente: só dispara o processamento se ainda não tiver sido
-      // disparado (o Mercado Pago pode reenviar a mesma notificação).
-      if (job && job.status === "aguardando_pagamento") {
+      // disparado (o Mercado Pago pode reenviar a mesma notificação). Aceita
+      // também "previa_imagem_pronta" — mesmo pré-requisito de
+      // estaProntoParaPagar nos endpoints de pagamento, senão o webhook nunca
+      // libera um job do fluxo de PDF-imagem mesmo com o pagamento aprovado.
+      if (job && estaProntoParaPagar(job.status)) {
         await supabase.from("jobs").update({ status: "pago" }).eq("id", jobId);
         await dispararProcessamentoCompleto(jobId);
 
