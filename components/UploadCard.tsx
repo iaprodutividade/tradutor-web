@@ -200,12 +200,27 @@ export function UploadCard() {
       {ultimoJobSalvo && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-3 text-sm">
           <span className="text-[var(--text-secondary)]">Você tem uma tradução recente em andamento ou pronta.</span>
-          <button
-            onClick={() => setJobParaRecuperar(ultimoJobSalvo)}
-            className="font-medium text-[var(--accent-info)] hover:opacity-75"
-          >
-            Continuar essa tradução
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setJobParaRecuperar(ultimoJobSalvo)}
+              className="font-medium text-[var(--accent-info)] hover:opacity-75"
+            >
+              Continuar essa tradução
+            </button>
+            <button
+              onClick={() => {
+                try {
+                  localStorage.removeItem("tradutor_ultimo_job");
+                } catch {
+                  // localStorage bloqueado -- sem problema, só o aviso que fica
+                }
+                setUltimoJobSalvo(null);
+              }}
+              className="font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+            >
+              Começar nova tradução
+            </button>
+          </div>
         </div>
       )}
       <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[1fr_auto_1fr]">
