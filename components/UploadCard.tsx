@@ -29,6 +29,7 @@ import { Card } from "@/components/ui";
 import { AcaoPill } from "@/components/AcaoTile";
 import { IDIOMAS } from "@/lib/idiomas";
 import { CardPaymentBrick, type CardFormData } from "@/components/CardPaymentBrick";
+import { createBrowserClient, BUCKET_ARQUIVOS } from "@/lib/supabase/client";
 
 type ResultadoPdf = {
   tipo: "pdf";
@@ -104,13 +105,52 @@ export function UploadCard() {
     setResultado(null);
 
     try {
-      const formData = new FormData();
-      formData.append("arquivo", arquivoAtual);
-      formData.append("idioma_origem", IDIOMAS.find((i) => i.codigo === origemAtual)?.nome ?? origemAtual);
-      formData.append("idioma_destino", IDIOMAS.find((i) => i.codigo === destinoAtual)?.nome ?? destinoAtual);
-      formData.append("converter_unidades", String(converterUnidades));
+      const idiomaOrigemNome = IDIOMAS.find((i) => i.codigo === origemAtual)?.nome ?? origemAtual;
+      const idiomaDestinoNome = IDIOMAS.find((i) => i.codigo === destinoAtual)?.nome ?? destinoAtual;
 
-      const resp = await fetch("/api/preview", { method: "POST", body: formData });
+      // Upload direto pro Storage (URL assinada), não pelo /api do Vercel —
+      // função serverless tem limite fixo de ~4,5MB de payload, bem menor
+      // que qualquer catálogo/apresentação real com fotos em alta resolução
+      // (achado testando um arquivo de 11MB em 25/09/2026). Só o CAMINHO no
+      // Storage passa pelo Vercel depois, nunca os bytes do arquivo.
+      const respIniciar = await fetch("/api/preview/iniciar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome_arquivo: arquivoAtual.name }),
+      });
+      const iniciarData = await respIniciar.json();
+      if (pedidoAtualRef.current !== meuPedido) return;
+      if (!respIniciar.ok) {
+        setMensagem(iniciarData.erro ?? "Não deu pra preparar o upload. Tenta de novo.");
+        setEstado("erro");
+        return;
+      }
+
+      const supabase = createBrowserClient();
+      const { error: erroUpload } = await supabase.storage
+        .from(BUCKET_ARQUIVOS)
+        .uploadToSignedUrl(iniciarData.path, iniciarData.token, arquivoAtual, {
+          contentType: arquivoAtual.type || undefined,
+        });
+      if (pedidoAtualRef.current !== meuPedido) return;
+      if (erroUpload) {
+        setMensagem("Não deu pra subir o arquivo. Tenta de novo.");
+        setEstado("erro");
+        return;
+      }
+
+      const resp = await fetch("/api/preview/finalizar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: iniciarData.job_id,
+          path: iniciarData.path,
+          nome_arquivo: arquivoAtual.name,
+          idioma_origem: idiomaOrigemNome,
+          idioma_destino: idiomaDestinoNome,
+          converter_unidades: converterUnidades,
+        }),
+      });
       const data = await resp.json();
       if (pedidoAtualRef.current !== meuPedido) return;
 
