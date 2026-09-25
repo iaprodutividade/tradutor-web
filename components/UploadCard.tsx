@@ -79,6 +79,49 @@ const PRECO_MINIMO_CENTAVOS = 1490;
 // precisar converter nada aqui. Mesma lista do backend (app.py, /preview).
 const EXTENSOES_ACEITAS = ["pdf", "docx", "jpg", "jpeg", "png", "webp"];
 
+// Mesmo teto do Supabase Storage no plano Free (MAX_TAMANHO_ARQUIVO_STORAGE
+// no backend, app.py) -- acima disso o upload direto pro Storage falha
+// sozinho, então comprime ANTES de tentar (ver comprimirSeNecessario).
+const LIMIAR_COMPRESSAO_BYTES = 50 * 1024 * 1024;
+
+// Comprime um PDF grande direto no backend (Ghostscript) antes do upload
+// pro Storage -- chamado direto do navegador (não pelo /api do Vercel) por
+// isso NÃO tem TRADUTOR_API_URL/TRADUTOR_API_KEY (servidor), usa a URL
+// pública dedicada NEXT_PUBLIC_TRADUTOR_API_URL, sem key (ver docstring de
+// /comprimir no backend pro motivo). Arquivo ≤ 50MB ou que não é PDF passa
+// direto, sem chamar nada.
+async function comprimirSeNecessario(
+  arquivoAtual: File,
+  avisar: (msg: string) => void
+): Promise<File> {
+  const ehPdf = arquivoAtual.type === "application/pdf" || arquivoAtual.name.toLowerCase().endsWith(".pdf");
+  if (!ehPdf || arquivoAtual.size <= LIMIAR_COMPRESSAO_BYTES) {
+    return arquivoAtual;
+  }
+
+  avisar("Arquivo grande — comprimindo antes de enviar, só um instante...");
+
+  const formData = new FormData();
+  formData.append("arquivo", arquivoAtual);
+  const resp = await fetch(`${process.env.NEXT_PUBLIC_TRADUTOR_API_URL}/comprimir`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!resp.ok) {
+    throw new Error("Não deu pra comprimir o arquivo.");
+  }
+
+  const blob = await resp.blob();
+  if (resp.headers.get("X-Coube-No-Alvo") !== "true") {
+    // Melhor esforço do Ghostscript não coube no alvo -- ainda tenta subir
+    // (pode caber no teto real do Storage mesmo sem ter atingido o alvo
+    // com folga), o upload/preview seguinte que vai acusar se não coube.
+    avisar("Comprimimos o máximo que deu — se ainda for grande demais, avisamos em seguida.");
+  }
+
+  return new File([blob], arquivoAtual.name, { type: "application/pdf" });
+}
+
 type EstadoPreview = "sem_arquivo" | "processando" | "pronto_pra_revelar" | "revelado" | "erro";
 
 export function UploadCard() {
@@ -108,6 +151,20 @@ export function UploadCard() {
       const idiomaOrigemNome = IDIOMAS.find((i) => i.codigo === origemAtual)?.nome ?? origemAtual;
       const idiomaDestinoNome = IDIOMAS.find((i) => i.codigo === destinoAtual)?.nome ?? destinoAtual;
 
+      // Arquivo >50MB nem consegue subir direto pro Storage (teto do plano
+      // Free) -- comprime ANTES de tentar, não depois (ver comprimirSeNecessario).
+      let arquivoParaEnviar: File;
+      try {
+        arquivoParaEnviar = await comprimirSeNecessario(arquivoAtual, setMensagem);
+      } catch {
+        if (pedidoAtualRef.current === meuPedido) {
+          setMensagem("Não deu pra comprimir esse arquivo grande. Tenta um arquivo menor.");
+          setEstado("erro");
+        }
+        return;
+      }
+      if (pedidoAtualRef.current !== meuPedido) return;
+
       // Upload direto pro Storage (URL assinada), não pelo /api do Vercel —
       // função serverless tem limite fixo de ~4,5MB de payload, bem menor
       // que qualquer catálogo/apresentação real com fotos em alta resolução
@@ -116,7 +173,7 @@ export function UploadCard() {
       const respIniciar = await fetch("/api/preview/iniciar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome_arquivo: arquivoAtual.name }),
+        body: JSON.stringify({ nome_arquivo: arquivoParaEnviar.name }),
       });
       const iniciarData = await respIniciar.json();
       if (pedidoAtualRef.current !== meuPedido) return;
@@ -129,8 +186,8 @@ export function UploadCard() {
       const supabase = createBrowserClient();
       const { error: erroUpload } = await supabase.storage
         .from(BUCKET_ARQUIVOS)
-        .uploadToSignedUrl(iniciarData.path, iniciarData.token, arquivoAtual, {
-          contentType: arquivoAtual.type || undefined,
+        .uploadToSignedUrl(iniciarData.path, iniciarData.token, arquivoParaEnviar, {
+          contentType: arquivoParaEnviar.type || undefined,
         });
       if (pedidoAtualRef.current !== meuPedido) return;
       if (erroUpload) {
@@ -145,7 +202,7 @@ export function UploadCard() {
         body: JSON.stringify({
           job_id: iniciarData.job_id,
           path: iniciarData.path,
-          nome_arquivo: arquivoAtual.name,
+          nome_arquivo: arquivoParaEnviar.name,
           idioma_origem: idiomaOrigemNome,
           idioma_destino: idiomaDestinoNome,
           converter_unidades: converterUnidades,
