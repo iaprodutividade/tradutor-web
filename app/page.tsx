@@ -42,12 +42,12 @@ export default function Home() {
         <div>
           <Badge>Novo</Badge>
           <h1 className="mt-4 text-4xl font-bold tracking-tight text-[var(--text-primary)] sm:text-5xl">
-            Traduza PDF e DOCX{" "}
+            Traduza documentos e imagens{" "}
             <span className="inline-block rounded-2xl bg-amber-400 px-3 py-1 text-zinc-900">sem perder o layout</span>
           </h1>
           <p className="mt-4 text-lg text-[var(--text-secondary)]">
-            Fichas técnicas, fichas de segurança, rótulos e contratos ficam com a mesma posição de
-            texto, a mesma fonte e as mesmas imagens. Só o idioma muda.
+            Fichas técnicas, fichas de segurança, rótulos, contratos e cardápios fotografados
+            ficam com a mesma posição de texto, a mesma fonte e as mesmas imagens. Só o idioma muda.
           </p>
           <div className="mt-8 flex justify-center">
             <a href="#traduzir" className="group">
