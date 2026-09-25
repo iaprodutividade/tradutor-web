@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Fonte ~12,5% maior que o padrão do navegador (16px -> 18px) -- pedido do
+   Robson: quase todo mundo usa pelo navegador, então vale sacrificar um
+   pouco de espaço em tela pra facilitar a leitura. Como as classes do
+   Tailwind são em rem, isso escala a fonte em TODO o site de uma vez, sem
+   precisar tocar em cada componente. */
+html {
+  font-size: 112.5%;
+}
+
 /* Mesma estrutura de tokens do Hub/Mural Financeiro/Governança IA (ver
    feedback_srty_referencia_visual_padrao na memória) — escuro é o tema
    padrão (sem atributo), acento azul/índigo (idioma, confiança, tradução). */

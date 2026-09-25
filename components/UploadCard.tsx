@@ -23,6 +23,7 @@ import {
   Mail,
   ImageOff,
   BrainCircuit,
+  RotateCcw,
 } from "lucide-react";
 import { Card } from "@/components/ui";
 import { AcaoPill } from "@/components/AcaoTile";
@@ -198,14 +199,13 @@ export function UploadCard() {
   return (
     <Card className="space-y-6">
       {ultimoJobSalvo && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-3 text-sm">
-          <span className="text-[var(--text-secondary)]">Você tem uma tradução recente em andamento ou pronta.</span>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setJobParaRecuperar(ultimoJobSalvo)}
-              className="font-medium text-[var(--accent-info)] hover:opacity-75"
-            >
-              Continuar essa tradução
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-4">
+          <span className="text-base font-medium text-[var(--text-secondary)]">
+            Você tem uma tradução recente em andamento ou pronta.
+          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <button onClick={() => setJobParaRecuperar(ultimoJobSalvo)} className="group">
+              <AcaoPill cor="esmeralda" label="Continuar essa tradução" icon={<ArrowRight className="h-4 w-4" />} />
             </button>
             <button
               onClick={() => {
@@ -216,9 +216,9 @@ export function UploadCard() {
                 }
                 setUltimoJobSalvo(null);
               }}
-              className="font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+              className="group"
             >
-              Começar nova tradução
+              <AcaoPill cor="rosa" label="Começar nova tradução" icon={<RotateCcw className="h-4 w-4" />} />
             </button>
           </div>
         </div>
