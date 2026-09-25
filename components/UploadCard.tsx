@@ -345,9 +345,12 @@ export function UploadCard() {
       </label>
 
       {estado === "processando" && (
-        <p className="flex items-center justify-center gap-2 text-sm text-[var(--text-secondary)]">
-          <IconeIaProcessando className="h-4 w-4" /> Traduzindo a 1ª página...
-        </p>
+        <div className="mx-auto w-full max-w-sm space-y-2">
+          <p className="flex items-center justify-center gap-2 text-sm text-[var(--text-secondary)]">
+            <IconeIaProcessando className="h-4 w-4" /> Traduzindo a 1ª página...
+          </p>
+          <div className="barra-indeterminada h-2 w-full overflow-hidden rounded-full bg-[var(--surface-2)] ring-1 ring-[var(--border)]" />
+        </div>
       )}
 
       {estado === "erro" && mensagem && <p className="text-center text-sm text-[var(--text-secondary)]">{mensagem}</p>}

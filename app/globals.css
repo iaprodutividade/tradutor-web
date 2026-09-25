@@ -134,3 +134,39 @@ body {
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
   animation: progresso-brilho 1.6s ease-in-out infinite;
 }
+
+/* Barra indeterminada -- usada onde não existe nenhum sinal real de
+   progresso pra mostrar (ex: prévia da 1ª página de PDF/DOCX, rápida demais
+   pra valer a pena medir). Diferente do progresso-brilho (brilho sobre uma
+   largura já definida), aqui o próprio bloco colorido anda de ponta a ponta
+   da trilha, repetindo -- sinal visual de "algo está rodando", pedido pelo
+   Robson depois de achar o spinner sozinho pouco chamativo. */
+@keyframes barra-indeterminada {
+  0% {
+    left: -35%;
+    width: 35%;
+  }
+  50% {
+    width: 55%;
+  }
+  100% {
+    left: 100%;
+    width: 35%;
+  }
+}
+
+.barra-indeterminada {
+  position: relative;
+  overflow: hidden;
+}
+
+.barra-indeterminada::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-info), #2563eb);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.55);
+  animation: barra-indeterminada 1.4s ease-in-out infinite;
+}
